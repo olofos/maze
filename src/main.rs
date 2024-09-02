@@ -8,6 +8,8 @@ use bevy::{
     prelude::*,
     time::common_conditions::on_timer,
 };
+
+#[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 use bevy::color::palettes::basic::SILVER;
@@ -50,13 +52,6 @@ impl Default for Cursor {
 }
 
 impl Grid {
-    fn new() -> Self {
-        Self {
-            visited: vec![false; GRID_WIDTH * GRID_HEIGHT],
-            walls: vec![[None; 4]; GRID_WIDTH * GRID_HEIGHT],
-        }
-    }
-
     fn is_visited(&self, pos: &IVec2) -> bool {
         self.visited[(pos.y as usize) * GRID_WIDTH + pos.x as usize]
     }
@@ -67,27 +62,28 @@ impl Grid {
 }
 
 fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Maze".to_string(),
-                resizable: false,
-                resolution: (SCREEN_WIDTH, SCREEN_HEIGHT).into(),
-                ..default()
-            }),
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: "Maze".to_string(),
+            resizable: false,
+            resolution: (SCREEN_WIDTH, SCREEN_HEIGHT).into(),
             ..default()
-        }))
-        .add_systems(Startup, setup)
-        .add_systems(Update, close_on_esc)
-        .add_systems(FixedUpdate, mover_player)
-        .add_plugins(WorldInspectorPlugin::new().run_if(
-            bevy::input::common_conditions::input_toggle_active(false, KeyCode::Backquote),
-        ))
-        .add_systems(
-            Update,
-            move_cursor.run_if(on_timer(Duration::from_millis(10))),
-        )
-        .run();
+        }),
+        ..default()
+    }))
+    .add_systems(Startup, setup)
+    .add_systems(Update, close_on_esc)
+    .add_systems(FixedUpdate, mover_player)
+    .add_systems(
+        Update,
+        move_cursor.run_if(on_timer(Duration::from_millis(10))),
+    );
+    #[cfg(not(target_arch = "wasm32"))]
+    app.add_plugins(WorldInspectorPlugin::new().run_if(
+        bevy::input::common_conditions::input_toggle_active(false, KeyCode::Backquote),
+    ));
+    app.run();
 }
 
 fn move_cursor(mut commands: Commands, mut cursor: Query<&mut Cursor>, mut grid: Query<&mut Grid>) {
