@@ -1,21 +1,14 @@
 use std::time::Duration;
 
-use bevy::{
-    math::{
-        bounding::{Aabb2d, IntersectsVolume},
-        ivec2,
-    },
-    prelude::*,
-    time::common_conditions::on_timer,
-};
+use bevy::{math::bounding::Aabb2d, prelude::*, time::common_conditions::on_timer};
 
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 use bevy::color::palettes::basic::SILVER;
 
-const GRID_WIDTH: usize = 8;
-const GRID_HEIGHT: usize = 8;
+const GRID_WIDTH: usize = 16;
+const GRID_HEIGHT: usize = 16;
 const MARGIN: f32 = 16.0;
 const PLAYFIELD_WIDTH: f32 = 1024.0;
 const PLAYFIELD_HEIGHT: f32 = 1024.0;
@@ -32,7 +25,7 @@ struct Collider;
 
 #[derive(Component)]
 struct Grid {
-    visited: Vec<bool>,
+    visited: Vec<i32>,
     walls: Vec<[Option<Entity>; 4]>,
 }
 
@@ -40,24 +33,17 @@ struct Grid {
 struct Cursor {
     path: Vec<IVec2>,
     sprites: Vec<Entity>,
-}
-
-impl Default for Cursor {
-    fn default() -> Self {
-        Self {
-            path: Vec::new(),
-            sprites: Vec::new(),
-        }
-    }
+    default: IVec2,
+    num: i32,
 }
 
 impl Grid {
     fn is_visited(&self, pos: &IVec2) -> bool {
-        self.visited[(pos.y as usize) * GRID_WIDTH + pos.x as usize]
+        self.visited[(pos.y as usize) * GRID_WIDTH + pos.x as usize] > 0
     }
 
-    fn visit(&mut self, pos: &IVec2) {
-        self.visited[(pos.y as usize) * GRID_WIDTH + pos.x as usize] = true;
+    fn visit(&mut self, pos: &IVec2, num: i32) {
+        self.visited[(pos.y as usize) * GRID_WIDTH + pos.x as usize] = num;
     }
 }
 
@@ -77,7 +63,7 @@ fn main() {
     .add_systems(FixedUpdate, mover_player)
     .add_systems(
         Update,
-        move_cursor.run_if(on_timer(Duration::from_millis(10))),
+        move_cursor.run_if(on_timer(Duration::from_millis(50))),
     );
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(WorldInspectorPlugin::new().run_if(
@@ -86,89 +72,110 @@ fn main() {
     app.run();
 }
 
-fn move_cursor(mut commands: Commands, mut cursor: Query<&mut Cursor>, mut grid: Query<&mut Grid>) {
-    let mut cursor = cursor.single_mut();
-    let mut grid = grid.single_mut();
+fn move_cursor(
+    mut commands: Commands,
+    mut cursor_query: Query<&mut Cursor>,
+    mut grid_query: Query<&mut Grid>,
+) {
+    for mut cursor in cursor_query.iter_mut() {
+        let mut grid = grid_query.single_mut();
 
-    let old_pos = cursor.path.last().copied();
+        let old_pos = cursor.path.last().copied();
 
-    let (pos, dir) = if let Some(pos) = cursor.path.last() {
-        let mut possibilities = vec![
-            (*pos + IVec2::Y, Some(0)),
-            (*pos + IVec2::X, Some(1)),
-            (*pos - IVec2::Y, Some(2)),
-            (*pos - IVec2::X, Some(3)),
-        ];
+        let (pos, dir) = if let Some(pos) = cursor.path.last() {
+            let mut possibilities = vec![
+                (*pos + IVec2::Y, Some(0)),
+                (*pos + IVec2::X, Some(1)),
+                (*pos - IVec2::Y, Some(2)),
+                (*pos - IVec2::X, Some(3)),
+            ];
 
-        possibilities.retain(|(pos, _)| {
-            pos.x >= 0
-                && pos.x < GRID_WIDTH as i32
-                && pos.y >= 0
-                && pos.y < GRID_HEIGHT as i32
-                && !grid.is_visited(pos)
-        });
-        if pos.x == GRID_WIDTH as i32 - 1 && pos.y == GRID_HEIGHT as i32 - 1 {
-            possibilities.clear();
-        }
+            possibilities.retain(|(pos, _)| {
+                pos.x >= 0
+                    && pos.x < GRID_WIDTH as i32
+                    && pos.y >= 0
+                    && pos.y < GRID_HEIGHT as i32
+                    && !grid.is_visited(pos)
+            });
 
-        if possibilities.is_empty() {
-            cursor.path.pop();
-            commands.entity(cursor.sprites.pop().unwrap()).despawn();
-            return;
-        } else {
-            use rand::Rng;
-            let mut rng = rand::thread_rng();
-            let index = rng.gen_range(0..possibilities.len());
-            possibilities[index]
-        }
-    } else {
-        if grid.is_visited(&IVec2::ZERO) {
-            return;
-        }
-        (ivec2(0, 0), None)
-    };
-
-    let sprite_id = commands
-        .spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    color: Color::from(SILVER),
-                    ..default()
-                },
-                transform: Transform {
-                    translation: Vec3::new(
-                        (pos.x as f32 + 0.5) * CELL_WIDTH,
-                        (pos.y as f32 + 0.5) * CELL_HEIGHT,
-                        1.,
-                    ),
-                    scale: Vec3::new(CELL_WIDTH / 2.0, CELL_HEIGHT / 2.0, 1.0),
-                    ..default()
-                },
-                ..default()
-            },
-            Name::from(format!("Cursor {}", pos)),
-        ))
-        .id();
-
-    cursor.path.push(pos);
-    cursor.sprites.push(sprite_id);
-    grid.visit(&pos);
-
-    if let Some(id) = {
-        if let Some(old_pos) = old_pos {
-            match dir {
-                Some(n) => {
-                    grid.walls[(pos.y * GRID_WIDTH as i32 + pos.x) as usize][(n + 2) % 4] = None;
-                    grid.walls[(old_pos.y * GRID_WIDTH as i32 + old_pos.x) as usize][n].take()
-                }
-                _ => None,
+            if possibilities.is_empty() {
+                cursor.path.pop();
+                commands.entity(cursor.sprites.pop().unwrap()).despawn();
+                continue;
+            } else {
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                let index = rng.gen_range(0..possibilities.len());
+                possibilities[index]
             }
         } else {
-            None
-        }
-    } {
-        if let Some(mut e) = commands.get_entity(id) {
-            e.despawn();
+            if grid.is_visited(&cursor.default) {
+                continue;
+            }
+            (cursor.default, None)
+        };
+
+        let (cx, cy, w, h) = if let Some(prev_pos) = old_pos {
+            if prev_pos.x == pos.x {
+                (
+                    0.5 + pos.x as f32,
+                    0.5 + (prev_pos.y + pos.y) as f32 / 2.0,
+                    0.25,
+                    0.75 + (prev_pos.y - pos.y).abs() as f32 / 2.0,
+                )
+            } else if prev_pos.y == pos.y {
+                (
+                    0.5 + (prev_pos.x + pos.x) as f32 / 2.0,
+                    0.5 + pos.y as f32,
+                    0.75 + (prev_pos.x - pos.x).abs() as f32 / 2.0,
+                    0.25,
+                )
+            } else {
+                (pos.x as f32 + 0.5, pos.y as f32 + 0.5, 0.25, 0.25)
+            }
+        } else {
+            (pos.x as f32 + 0.5, pos.y as f32 + 0.5, 0.5, 0.5)
+        };
+
+        let sprite_id = commands
+            .spawn((
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::from(SILVER),
+                        ..default()
+                    },
+                    transform: Transform {
+                        translation: Vec3::new(cx * CELL_WIDTH, cy * CELL_HEIGHT, 1.),
+                        scale: Vec3::new(w * CELL_WIDTH, h * CELL_HEIGHT, 1.0),
+                        ..default()
+                    },
+                    ..default()
+                },
+                Name::from(format!("Cursor {}", pos)),
+            ))
+            .id();
+
+        cursor.path.push(pos);
+        cursor.sprites.push(sprite_id);
+        grid.visit(&pos, cursor.num);
+
+        if let Some(id) = {
+            if let Some(old_pos) = old_pos {
+                match dir {
+                    Some(n) => {
+                        grid.walls[(pos.y * GRID_WIDTH as i32 + pos.x) as usize][(n + 2) % 4] =
+                            None;
+                        grid.walls[(old_pos.y * GRID_WIDTH as i32 + old_pos.x) as usize][n].take()
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } {
+            if let Some(mut e) = commands.get_entity(id) {
+                e.despawn();
+            }
         }
     }
 }
@@ -182,7 +189,19 @@ fn setup(mut commands: Commands) {
         ..default()
     });
 
-    commands.spawn((Cursor::default(), Name::from("Cursor")));
+    for num in 1..=4 {
+        let x = ((num - 1) % 2) * (GRID_WIDTH as i32 - 1);
+        let y = ((num - 1) / 2) * (GRID_HEIGHT as i32 - 1);
+        commands.spawn((
+            Cursor {
+                path: vec![],
+                sprites: vec![],
+                default: IVec2::new(x, y),
+                num,
+            },
+            Name::from(format!("Cursor {num}")),
+        ));
+    }
 
     let mut walls: Vec<[Option<Entity>; 4]> = vec![[None; 4]; GRID_WIDTH * GRID_HEIGHT];
 
@@ -246,74 +265,33 @@ fn setup(mut commands: Commands) {
     }
 
     commands.spawn(Grid {
-        visited: vec![false; GRID_WIDTH * GRID_HEIGHT],
+        visited: vec![0; GRID_WIDTH * GRID_HEIGHT],
         walls,
     });
 
-    commands.spawn((
-        SpriteBundle {
-            sprite: Sprite {
-                color: Color::srgb(1.0, 0.0, 0.0),
+    for (x, y, w, h, name) in [
+        (0.0, 0.5, 1.0, PLAYFIELD_HEIGHT, "Left"),
+        (1.0, 0.5, 1.0, PLAYFIELD_HEIGHT, "Right"),
+        (0.5, 1.0, PLAYFIELD_WIDTH, 1.0, "Top"),
+        (0.5, 0.0, PLAYFIELD_WIDTH, 1.0, "Bottom"),
+    ] {
+        commands.spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    color: Color::srgb(1.0, 0.0, 0.0),
+                    ..default()
+                },
+                transform: Transform {
+                    translation: Vec3::new(x * PLAYFIELD_WIDTH, y * PLAYFIELD_HEIGHT, 1.),
+                    scale: Vec3::new(w, h, 1.0),
+                    ..default()
+                },
                 ..default()
             },
-            transform: Transform {
-                translation: Vec3::new(0., PLAYFIELD_HEIGHT / 2.0, 1.),
-                scale: Vec3::new(1.0, PLAYFIELD_HEIGHT, 1.0),
-                ..default()
-            },
-            ..default()
-        },
-        Collider,
-        Name::from("Outer Wall Left"),
-    ));
-    commands.spawn((
-        SpriteBundle {
-            sprite: Sprite {
-                color: Color::srgb(1.0, 0.0, 0.0),
-                ..default()
-            },
-            transform: Transform {
-                translation: Vec3::new(PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT / 2.0, 1.),
-                scale: Vec3::new(1.0, PLAYFIELD_HEIGHT, 1.0),
-                ..default()
-            },
-            ..default()
-        },
-        Collider,
-        Name::from("Outer Wall Right"),
-    ));
-    commands.spawn((
-        SpriteBundle {
-            sprite: Sprite {
-                color: Color::srgb(1.0, 0.0, 0.0),
-                ..default()
-            },
-            transform: Transform {
-                translation: Vec3::new(PLAYFIELD_WIDTH / 2.0, 0., 1.),
-                scale: Vec3::new(PLAYFIELD_WIDTH, 1.0, 1.0),
-                ..default()
-            },
-            ..default()
-        },
-        Collider,
-        Name::from("Outer Wall Bottom"),
-    ));
-    commands.spawn((
-        SpriteBundle {
-            sprite: Sprite {
-                color: Color::srgb(1.0, 0.0, 0.0),
-                ..default()
-            },
-            transform: Transform {
-                translation: Vec3::new(PLAYFIELD_WIDTH / 2.0, PLAYFIELD_HEIGHT, 1.),
-                scale: Vec3::new(PLAYFIELD_WIDTH, 1.0, 1.0),
-                ..default()
-            },
-            ..default()
-        },
-        Collider,
-        Name::from("Outer Wall Top"),
-    ));
+            Collider,
+            Name::from(format!("Outer Wall {name}")),
+        ));
+    }
 
     commands.spawn((
         SpriteBundle {
