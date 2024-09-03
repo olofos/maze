@@ -25,6 +25,9 @@ const PLAYER_SPEED: f32 = GRID_WIDTH as f32 / 4.0;
 struct Player;
 
 #[derive(Component)]
+struct Goal;
+
+#[derive(Component)]
 struct BackgroundSprite;
 
 #[derive(Clone)]
@@ -50,7 +53,7 @@ struct Cursor {
     num: i32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Dir {
     Up,
     Down,
@@ -101,20 +104,41 @@ fn main() {
         }),
         ..default()
     }))
+    .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
     .add_systems(Update, close_on_esc)
-    .add_systems(FixedUpdate, mover_player)
+    .add_systems(FixedUpdate, move_player)
     .add_systems(
         Update,
         move_cursor.run_if(on_timer(Duration::from_millis(10))),
-    );
+    )
+    .add_systems(FixedUpdate, check_goal);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(WorldInspectorPlugin::new().run_if(
         bevy::input::common_conditions::input_toggle_active(false, KeyCode::Backquote),
     ));
-    app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
 
     app.run();
+}
+
+fn collide(transform1: &Transform, transform2: &Transform) -> bool {
+    (transform1.translation.xy() - transform2.translation.xy())
+        .abs()
+        .cmplt((transform1.scale.xy() + transform2.scale.xy()) / 2.0)
+        .all()
+}
+
+fn check_goal(
+    mut ev_appexit: EventWriter<AppExit>,
+    player_query: Query<&Transform, (With<Player>, Without<Goal>)>,
+    goal_query: Query<&Transform, (Without<Player>, With<Goal>)>,
+) {
+    let player_transform = player_query.single();
+    let goal_transform = goal_query.single();
+
+    if collide(player_transform, goal_transform) {
+        ev_appexit.send(AppExit::Success);
+    }
 }
 
 fn move_cursor(
@@ -265,6 +289,27 @@ fn setup(mut commands: Commands) {
         ));
     }
 
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::srgb(0., 0.7, 0.3),
+                ..default()
+            },
+            transform: Transform {
+                translation: Vec3::new(
+                    (GRID_WIDTH - 1) as f32 + 0.5,
+                    (GRID_HEIGHT - 1) as f32 + 0.5,
+                    1.,
+                ),
+                scale: Vec3::new(0.75, 0.75, 1.0),
+                ..default()
+            },
+            ..default()
+        },
+        Goal,
+        Name::from("Goal"),
+    ));
+
     let mut walls: Vec<Walls> = vec![
         Walls {
             up: None,
@@ -405,7 +450,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         SpriteBundle {
             sprite: Sprite {
-                color: Color::srgb(1.0, 0.0, 0.0),
+                color: Color::srgb(0.0, 0.3, 0.7),
                 ..default()
             },
             transform: Transform {
@@ -420,7 +465,7 @@ fn setup(mut commands: Commands) {
     ));
 }
 
-fn mover_player(
+fn move_player(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut player_query: Query<&mut Transform, With<Player>>,
     grid_query: Query<&Grid>,
