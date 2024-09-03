@@ -6,16 +6,18 @@ use bevy::{math::bounding::Aabb2d, prelude::*, time::common_conditions::on_timer
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 use bevy::color::palettes::basic::SILVER;
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 
-const GRID_WIDTH: usize = 16;
-const GRID_HEIGHT: usize = 16;
+const GRID_WIDTH: usize = 32;
+const GRID_HEIGHT: usize = 32;
 const MARGIN: f32 = 16.0;
 const PLAYFIELD_WIDTH: f32 = 1024.0;
 const PLAYFIELD_HEIGHT: f32 = 1024.0;
 const SCREEN_WIDTH: f32 = PLAYFIELD_WIDTH + MARGIN * 2.0;
 const SCREEN_HEIGHT: f32 = PLAYFIELD_HEIGHT + MARGIN * 2.0;
-const CELL_WIDTH: f32 = PLAYFIELD_WIDTH / GRID_WIDTH as f32;
-const CELL_HEIGHT: f32 = PLAYFIELD_HEIGHT / GRID_HEIGHT as f32;
+const PIXEL_WIDTH: f32 = GRID_WIDTH as f32 / PLAYFIELD_WIDTH as f32;
+const PIXEL_HEIGHT: f32 = GRID_HEIGHT as f32 / PLAYFIELD_HEIGHT as f32;
+const PLAYER_SPEED: f32 = 4.0;
 
 #[derive(Component)]
 struct Player;
@@ -24,9 +26,13 @@ struct Player;
 struct Collider;
 
 #[derive(Component)]
+struct BackgroundSprite;
+
+#[derive(Component)]
 struct Grid {
     visited: Vec<i32>,
     walls: Vec<[Option<Entity>; 4]>,
+    sprites: Vec<Entity>,
 }
 
 #[derive(Component)]
@@ -69,6 +75,8 @@ fn main() {
     app.add_plugins(WorldInspectorPlugin::new().run_if(
         bevy::input::common_conditions::input_toggle_active(false, KeyCode::Backquote),
     ));
+    app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
+
     app.run();
 }
 
@@ -76,6 +84,7 @@ fn move_cursor(
     mut commands: Commands,
     mut cursor_query: Query<&mut Cursor>,
     mut grid_query: Query<&mut Grid>,
+    mut background_query: Query<&mut Sprite, With<BackgroundSprite>>,
 ) {
     for mut cursor in cursor_query.iter_mut() {
         let mut grid = grid_query.single_mut();
@@ -118,23 +127,23 @@ fn move_cursor(
         let (cx, cy, w, h) = if let Some(prev_pos) = old_pos {
             if prev_pos.x == pos.x {
                 (
-                    0.5 + pos.x as f32,
-                    0.5 + (prev_pos.y + pos.y) as f32 / 2.0,
+                    pos.x as f32,
+                    (prev_pos.y + pos.y) as f32 / 2.0,
                     0.25,
                     0.75 + (prev_pos.y - pos.y).abs() as f32 / 2.0,
                 )
             } else if prev_pos.y == pos.y {
                 (
-                    0.5 + (prev_pos.x + pos.x) as f32 / 2.0,
-                    0.5 + pos.y as f32,
+                    (prev_pos.x + pos.x) as f32 / 2.0,
+                    pos.y as f32,
                     0.75 + (prev_pos.x - pos.x).abs() as f32 / 2.0,
                     0.25,
                 )
             } else {
-                (pos.x as f32 + 0.5, pos.y as f32 + 0.5, 0.25, 0.25)
+                (pos.x as f32, pos.y as f32, 0.25, 0.25)
             }
         } else {
-            (pos.x as f32 + 0.5, pos.y as f32 + 0.5, 0.5, 0.5)
+            (pos.x as f32, pos.y as f32, 0.25, 0.25)
         };
 
         let sprite_id = commands
@@ -145,8 +154,8 @@ fn move_cursor(
                         ..default()
                     },
                     transform: Transform {
-                        translation: Vec3::new(cx * CELL_WIDTH, cy * CELL_HEIGHT, 1.),
-                        scale: Vec3::new(w * CELL_WIDTH, h * CELL_HEIGHT, 1.0),
+                        translation: Vec3::new(cx + 0.5, cy + 0.5, 1.),
+                        scale: Vec3::new(w, h, 1.0),
                         ..default()
                     },
                     ..default()
@@ -158,6 +167,19 @@ fn move_cursor(
         cursor.path.push(pos);
         cursor.sprites.push(sprite_id);
         grid.visit(&pos, cursor.num);
+
+        let colors = [
+            Color::srgb(0.2, 0.0, 0.0),
+            Color::srgb(0.0, 0.2, 0.0),
+            Color::srgb(0.2, 0.0, 0.2),
+            Color::srgb(0.0, 0.0, 0.2),
+        ];
+
+        if let Ok(mut sprite) =
+            background_query.get_mut(grid.sprites[(pos.y * GRID_WIDTH as i32 + pos.x) as usize])
+        {
+            sprite.color = colors[(cursor.num - 1) as usize];
+        }
 
         if let Some(id) = {
             if let Some(old_pos) = old_pos {
@@ -183,7 +205,8 @@ fn move_cursor(
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle {
         transform: Transform {
-            translation: Vec3::new(PLAYFIELD_WIDTH / 2., PLAYFIELD_HEIGHT / 2., 0.0),
+            translation: Vec3::new(GRID_WIDTH as f32 / 2., GRID_HEIGHT as f32 / 2., 0.0),
+            scale: Vec3::new(PIXEL_WIDTH, PIXEL_HEIGHT, 1.0),
             ..default()
         },
         ..default()
@@ -215,12 +238,8 @@ fn setup(mut commands: Commands) {
                             ..default()
                         },
                         transform: Transform {
-                            translation: Vec3::new(
-                                (x as f32 + 0.5) * CELL_WIDTH,
-                                (y as f32 + 1.0) * CELL_HEIGHT,
-                                1.,
-                            ),
-                            scale: Vec3::new(CELL_WIDTH, 1.0, 1.0),
+                            translation: Vec3::new(x as f32 + 0.5, y as f32 + 1.0, 1.),
+                            scale: Vec3::new(1.0, PIXEL_HEIGHT, 1.0),
                             ..default()
                         },
                         ..default()
@@ -244,12 +263,8 @@ fn setup(mut commands: Commands) {
                             ..default()
                         },
                         transform: Transform {
-                            translation: Vec3::new(
-                                (x as f32 + 1.0) * CELL_WIDTH,
-                                (y as f32 + 0.5) * CELL_HEIGHT,
-                                1.,
-                            ),
-                            scale: Vec3::new(1.0, CELL_HEIGHT, 1.0),
+                            translation: Vec3::new(x as f32 + 1.0, y as f32 + 0.5, 1.),
+                            scale: Vec3::new(PIXEL_WIDTH, 1.0, 1.0),
                             ..default()
                         },
                         ..default()
@@ -264,25 +279,75 @@ fn setup(mut commands: Commands) {
         }
     }
 
+    let mut sprites = vec![];
+    for y in 0..GRID_HEIGHT {
+        for x in 0..GRID_WIDTH {
+            let id = commands
+                .spawn((
+                    SpriteBundle {
+                        sprite: Sprite {
+                            color: Color::srgb(0.0, 0.0, 0.0),
+                            ..default()
+                        },
+                        transform: Transform {
+                            translation: Vec3::new(x as f32 + 0.5, y as f32 + 0.5, -1.),
+                            scale: Vec3::new(1.0, 1.0, 1.0),
+                            ..default()
+                        },
+                        ..default()
+                    },
+                    BackgroundSprite,
+                    Name::from(format!("Background {x} {y}")),
+                ))
+                .id();
+            sprites.push(id);
+        }
+    }
+
     commands.spawn(Grid {
         visited: vec![0; GRID_WIDTH * GRID_HEIGHT],
         walls,
+        sprites,
     });
 
     for (x, y, w, h, name) in [
-        (0.0, 0.5, 1.0, PLAYFIELD_HEIGHT, "Left"),
-        (1.0, 0.5, 1.0, PLAYFIELD_HEIGHT, "Right"),
-        (0.5, 1.0, PLAYFIELD_WIDTH, 1.0, "Top"),
-        (0.5, 0.0, PLAYFIELD_WIDTH, 1.0, "Bottom"),
+        (
+            0.0,
+            0.5,
+            3.0 * PIXEL_WIDTH,
+            GRID_HEIGHT as f32 + 2.0 * PIXEL_HEIGHT,
+            "Left",
+        ),
+        (
+            1.0,
+            0.5,
+            3.0 * PIXEL_WIDTH,
+            GRID_HEIGHT as f32 + 2.0 * PIXEL_HEIGHT,
+            "Right",
+        ),
+        (
+            0.5,
+            1.0,
+            GRID_WIDTH as f32 + 2.0 * PIXEL_WIDTH,
+            3.0 * PIXEL_HEIGHT,
+            "Top",
+        ),
+        (
+            0.5,
+            0.0,
+            GRID_WIDTH as f32 + 2.0 * PIXEL_WIDTH,
+            3.0 * PIXEL_HEIGHT,
+            "Bottom",
+        ),
     ] {
         commands.spawn((
             SpriteBundle {
                 sprite: Sprite {
-                    color: Color::srgb(1.0, 0.0, 0.0),
+                    color: Color::from(SILVER),
                     ..default()
                 },
                 transform: Transform {
-                    translation: Vec3::new(x * PLAYFIELD_WIDTH, y * PLAYFIELD_HEIGHT, 1.),
+                    translation: Vec3::new(x * GRID_WIDTH as f32, y * GRID_HEIGHT as f32, 1.),
                     scale: Vec3::new(w, h, 1.0),
                     ..default()
                 },
@@ -300,8 +365,8 @@ fn setup(mut commands: Commands) {
                 ..default()
             },
             transform: Transform {
-                translation: Vec3::new(CELL_WIDTH / 2.0, CELL_HEIGHT / 2.0, 2.),
-                scale: Vec3::new(CELL_WIDTH / 2.0, CELL_HEIGHT / 2.0, 1.0),
+                translation: Vec3::new(0.5, 0.5, 2.),
+                scale: Vec3::new(0.5, 0.5, 1.0),
                 ..default()
             },
             ..default()
@@ -317,7 +382,6 @@ fn mover_player(
     collider_query: Query<&Transform, (With<Collider>, Without<Player>)>,
     time: Res<Time>,
 ) {
-    const SPEED: f32 = 256.0;
     let mut player_transform = player_query.single_mut();
 
     let mut direction = Vec3::new(0., 0., 0.);
@@ -335,7 +399,7 @@ fn mover_player(
         direction.x += 1.;
     }
 
-    direction *= SPEED * time.delta_seconds();
+    direction *= PLAYER_SPEED * time.delta_seconds();
 
     let new_translation = player_transform.translation + direction;
     let player_aabb = Aabb2d::new(
