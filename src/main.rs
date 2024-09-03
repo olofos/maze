@@ -20,7 +20,7 @@ const PIXEL_WIDTH: f32 = GRID_WIDTH as f32 / PLAYFIELD_WIDTH as f32;
 const PIXEL_HEIGHT: f32 = GRID_HEIGHT as f32 / PLAYFIELD_HEIGHT as f32;
 const PLAYER_WIDTH: f32 = 0.75;
 const PLAYER_HEIGHT: f32 = 0.75;
-const PLAYER_SPEED: f32 = 8.0;
+const PLAYER_SPEED: f32 = GRID_WIDTH as f32 / 4.0;
 
 #[derive(Component)]
 struct Player;
