@@ -8,8 +8,8 @@ use bevy::time::common_conditions::on_timer;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-const GRID_WIDTH: usize = 8;
-const GRID_HEIGHT: usize = 8;
+const GRID_WIDTH: usize = 32;
+const GRID_HEIGHT: usize = 32;
 const MARGIN: f32 = 16.0;
 const PLAYFIELD_WIDTH: f32 = 1024.0;
 const PLAYFIELD_HEIGHT: f32 = 1024.0;
@@ -27,10 +27,18 @@ struct Player;
 #[derive(Component)]
 struct BackgroundSprite;
 
+#[derive(Clone)]
+struct Walls {
+    up: Option<Entity>,
+    down: Option<Entity>,
+    left: Option<Entity>,
+    right: Option<Entity>,
+}
+
 #[derive(Component)]
 struct Grid {
     visited: Vec<i32>,
-    walls: Vec<[Option<Entity>; 4]>,
+    walls: Vec<Walls>,
     sprites: Vec<Entity>,
 }
 
@@ -40,6 +48,36 @@ struct Cursor {
     sprites: Vec<Entity>,
     default: IVec2,
     num: i32,
+}
+
+#[derive(Clone, Copy)]
+enum Dir {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Walls {
+    fn get_mut(&mut self, dir: Dir) -> &mut Option<Entity> {
+        match dir {
+            Dir::Up => &mut self.up,
+            Dir::Down => &mut self.down,
+            Dir::Left => &mut self.left,
+            Dir::Right => &mut self.right,
+        }
+    }
+}
+
+impl Dir {
+    fn reverse(&self) -> Self {
+        match self {
+            Dir::Up => Dir::Down,
+            Dir::Down => Dir::Up,
+            Dir::Left => Dir::Right,
+            Dir::Right => Dir::Left,
+        }
+    }
 }
 
 impl Grid {
@@ -68,7 +106,7 @@ fn main() {
     .add_systems(FixedUpdate, mover_player)
     .add_systems(
         Update,
-        move_cursor.run_if(on_timer(Duration::from_millis(50))),
+        move_cursor.run_if(on_timer(Duration::from_millis(10))),
     );
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(WorldInspectorPlugin::new().run_if(
@@ -92,10 +130,10 @@ fn move_cursor(
 
         let (pos, dir) = if let Some(pos) = cursor.path.last() {
             let mut possibilities = vec![
-                (*pos + IVec2::Y, Some(0)),
-                (*pos + IVec2::X, Some(1)),
-                (*pos - IVec2::Y, Some(2)),
-                (*pos - IVec2::X, Some(3)),
+                (*pos + IVec2::Y, Some(Dir::Up)),
+                (*pos + IVec2::X, Some(Dir::Right)),
+                (*pos - IVec2::Y, Some(Dir::Down)),
+                (*pos - IVec2::X, Some(Dir::Left)),
             ];
 
             possibilities.retain(|(pos, _)| {
@@ -183,10 +221,12 @@ fn move_cursor(
         if let Some(id) = {
             if let Some(old_pos) = old_pos {
                 match dir {
-                    Some(n) => {
-                        grid.walls[(pos.y * GRID_WIDTH as i32 + pos.x) as usize][(n + 2) % 4] =
-                            None;
-                        grid.walls[(old_pos.y * GRID_WIDTH as i32 + old_pos.x) as usize][n].take()
+                    Some(dir) => {
+                        *grid.walls[(pos.y * GRID_WIDTH as i32 + pos.x) as usize]
+                            .get_mut(dir.reverse()) = None;
+                        grid.walls[(old_pos.y * GRID_WIDTH as i32 + old_pos.x) as usize]
+                            .get_mut(dir)
+                            .take()
                     }
                     _ => None,
                 }
@@ -225,7 +265,15 @@ fn setup(mut commands: Commands) {
         ));
     }
 
-    let mut walls: Vec<[Option<Entity>; 4]> = vec![[None; 4]; GRID_WIDTH * GRID_HEIGHT];
+    let mut walls: Vec<Walls> = vec![
+        Walls {
+            up: None,
+            down: None,
+            left: None,
+            right: None
+        };
+        GRID_WIDTH * GRID_HEIGHT
+    ];
 
     for x in 0..GRID_WIDTH {
         for y in 0..GRID_HEIGHT - 1 {
@@ -247,8 +295,8 @@ fn setup(mut commands: Commands) {
                 ))
                 .id();
 
-            walls[(y * GRID_WIDTH + x) as usize][0] = Some(id);
-            walls[((y + 1) * GRID_WIDTH + x) as usize][2] = Some(id);
+            walls[(y * GRID_WIDTH + x) as usize].up = Some(id);
+            walls[((y + 1) * GRID_WIDTH + x) as usize].down = Some(id);
         }
     }
     for x in 0..GRID_WIDTH - 1 {
@@ -271,8 +319,8 @@ fn setup(mut commands: Commands) {
                 ))
                 .id();
 
-            walls[(y * GRID_WIDTH + x) as usize][1] = Some(id);
-            walls[(y * GRID_WIDTH + x + 1) as usize][3] = Some(id);
+            walls[(y * GRID_WIDTH + x) as usize].right = Some(id);
+            walls[(y * GRID_WIDTH + x + 1) as usize].left = Some(id);
         }
     }
 
@@ -398,32 +446,36 @@ fn mover_player(
 
     direction *= PLAYER_SPEED * time.delta_seconds();
 
-    let pos = player_transform.translation.xy().floor();
-    let walls = grid.walls[(pos.y * GRID_WIDTH as f32 + pos.x) as usize];
+    if keyboard_input.pressed(KeyCode::ControlLeft) {
+        direction *= 4.0;
+    }
 
-    let between = (player_transform.translation.xy() - (pos + Vec2::new(0.5, 0.5)))
+    let pos = player_transform.translation.xy().floor();
+    let walls = &grid.walls[(pos.y * GRID_WIDTH as f32 + pos.x) as usize];
+
+    let is_between = (player_transform.translation.xy() - (pos + Vec2::new(0.5, 0.5)))
         .abs()
         .cmpgt(Vec2::new(
             (1.0 - PLAYER_WIDTH) / 2.0,
             (1.0 - PLAYER_HEIGHT) / 2.0,
         ));
 
-    let min_x = if between.y || walls[3].is_some() {
+    let min_x = if is_between.y || walls.left.is_some() {
         pos.x
     } else {
         0.0
     };
-    let max_x = if between.y || walls[1].is_some() {
+    let max_x = if is_between.y || walls.right.is_some() {
         pos.x + 1.0
     } else {
         GRID_WIDTH as f32
     };
-    let min_y = if between.x || walls[2].is_some() {
+    let min_y = if is_between.x || walls.down.is_some() {
         pos.y
     } else {
         0.0
     };
-    let max_y = if between.x || walls[0].is_some() {
+    let max_y = if is_between.x || walls.up.is_some() {
         pos.y + 1.0
     } else {
         GRID_HEIGHT as f32
