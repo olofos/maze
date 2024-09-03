@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use bevy::color::palettes::basic::SILVER;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-use bevy::math::bounding::Aabb2d;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 
@@ -399,37 +398,35 @@ fn mover_player(
 
     direction *= PLAYER_SPEED * time.delta_seconds();
 
-    let aabb = Aabb2d::new(
-        player_transform.translation.truncate(),
-        player_transform.scale.truncate() / 2.,
-    );
-
     let pos = player_transform.translation.xy().floor();
     let walls = grid.walls[(pos.y * GRID_WIDTH as f32 + pos.x) as usize];
 
-    let (min_x, max_x) = if aabb.min.y.floor() != aabb.max.y.floor() {
-        (aabb.min.x.floor(), aabb.max.x.ceil())
+    let between = (player_transform.translation.xy() - (pos + Vec2::new(0.5, 0.5)))
+        .abs()
+        .cmpgt(Vec2::new(
+            (1.0 - PLAYER_WIDTH) / 2.0,
+            (1.0 - PLAYER_HEIGHT) / 2.0,
+        ));
+
+    let min_x = if between.y || walls[3].is_some() {
+        pos.x
     } else {
-        (
-            if walls[3].is_some() { pos.x } else { 0.0 },
-            if walls[1].is_some() {
-                pos.x + 1.0
-            } else {
-                GRID_WIDTH as f32
-            },
-        )
+        0.0
     };
-    let (min_y, max_y) = if aabb.min.x.floor() != aabb.max.x.floor() {
-        (aabb.min.y.floor(), aabb.max.y.ceil())
+    let max_x = if between.y || walls[1].is_some() {
+        pos.x + 1.0
     } else {
-        (
-            if walls[2].is_some() { pos.y } else { 0.0 },
-            if walls[0].is_some() {
-                pos.y + 1.0
-            } else {
-                GRID_HEIGHT as f32
-            },
-        )
+        GRID_WIDTH as f32
+    };
+    let min_y = if between.x || walls[2].is_some() {
+        pos.y
+    } else {
+        0.0
+    };
+    let max_y = if between.x || walls[0].is_some() {
+        pos.y + 1.0
+    } else {
+        GRID_HEIGHT as f32
     };
 
     let d = Vec3::new(
@@ -437,12 +434,11 @@ fn mover_player(
         PLAYER_HEIGHT / 2.0 + PIXEL_HEIGHT,
         0.0,
     );
-    let new_translation = (player_transform.translation + direction).clamp(
+
+    player_transform.translation = (player_transform.translation + direction).clamp(
         Vec3::new(min_x, min_y, 0.) + d,
         Vec3::new(max_x, max_y, 0.) - d,
     );
-
-    player_transform.translation = new_translation;
 }
 
 pub fn close_on_esc(
