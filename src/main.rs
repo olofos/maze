@@ -1,15 +1,16 @@
 use std::time::Duration;
 
-use bevy::{math::bounding::Aabb2d, prelude::*, time::common_conditions::on_timer};
+use bevy::color::palettes::basic::SILVER;
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::math::bounding::Aabb2d;
+use bevy::prelude::*;
+use bevy::time::common_conditions::on_timer;
 
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-use bevy::color::palettes::basic::SILVER;
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-
-const GRID_WIDTH: usize = 32;
-const GRID_HEIGHT: usize = 32;
+const GRID_WIDTH: usize = 8;
+const GRID_HEIGHT: usize = 8;
 const MARGIN: f32 = 16.0;
 const PLAYFIELD_WIDTH: f32 = 1024.0;
 const PLAYFIELD_HEIGHT: f32 = 1024.0;
@@ -17,13 +18,12 @@ const SCREEN_WIDTH: f32 = PLAYFIELD_WIDTH + MARGIN * 2.0;
 const SCREEN_HEIGHT: f32 = PLAYFIELD_HEIGHT + MARGIN * 2.0;
 const PIXEL_WIDTH: f32 = GRID_WIDTH as f32 / PLAYFIELD_WIDTH as f32;
 const PIXEL_HEIGHT: f32 = GRID_HEIGHT as f32 / PLAYFIELD_HEIGHT as f32;
-const PLAYER_SPEED: f32 = 4.0;
+const PLAYER_WIDTH: f32 = 0.75;
+const PLAYER_HEIGHT: f32 = 0.75;
+const PLAYER_SPEED: f32 = 8.0;
 
 #[derive(Component)]
 struct Player;
-
-#[derive(Component)]
-struct Collider;
 
 #[derive(Component)]
 struct BackgroundSprite;
@@ -212,7 +212,7 @@ fn setup(mut commands: Commands) {
         ..default()
     });
 
-    for num in 1..=4 {
+    for num in 1..=1 {
         let x = ((num - 1) % 2) * (GRID_WIDTH as i32 - 1);
         let y = ((num - 1) / 2) * (GRID_HEIGHT as i32 - 1);
         commands.spawn((
@@ -244,7 +244,6 @@ fn setup(mut commands: Commands) {
                         },
                         ..default()
                     },
-                    Collider,
                     Name::from(format!("Horizontal Wall {x} {y}")),
                 ))
                 .id();
@@ -269,7 +268,6 @@ fn setup(mut commands: Commands) {
                         },
                         ..default()
                     },
-                    Collider,
                     Name::from(format!("Vertical Wall {x} {y}")),
                 ))
                 .id();
@@ -353,7 +351,6 @@ fn setup(mut commands: Commands) {
                 },
                 ..default()
             },
-            Collider,
             Name::from(format!("Outer Wall {name}")),
         ));
     }
@@ -366,7 +363,7 @@ fn setup(mut commands: Commands) {
             },
             transform: Transform {
                 translation: Vec3::new(0.5, 0.5, 2.),
-                scale: Vec3::new(0.5, 0.5, 1.0),
+                scale: Vec3::new(PLAYER_WIDTH, PLAYER_HEIGHT, 1.0),
                 ..default()
             },
             ..default()
@@ -379,10 +376,11 @@ fn setup(mut commands: Commands) {
 fn mover_player(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut player_query: Query<&mut Transform, With<Player>>,
-    collider_query: Query<&Transform, (With<Collider>, Without<Player>)>,
+    grid_query: Query<&Grid>,
     time: Res<Time>,
 ) {
     let mut player_transform = player_query.single_mut();
+    let grid = grid_query.single();
 
     let mut direction = Vec3::new(0., 0., 0.);
 
@@ -401,41 +399,50 @@ fn mover_player(
 
     direction *= PLAYER_SPEED * time.delta_seconds();
 
-    let new_translation = player_transform.translation + direction;
-    let player_aabb = Aabb2d::new(
-        new_translation.truncate(),
+    let aabb = Aabb2d::new(
+        player_transform.translation.truncate(),
         player_transform.scale.truncate() / 2.,
     );
 
-    for collider_transform in collider_query.iter() {
-        let aabb = Aabb2d::new(
-            collider_transform.translation.truncate(),
-            collider_transform.scale.truncate() / 2.,
-        );
+    let pos = player_transform.translation.xy().floor();
+    let walls = grid.walls[(pos.y * GRID_WIDTH as f32 + pos.x) as usize];
 
-        if aabb.min.x > player_aabb.max.x
-            || aabb.max.x < player_aabb.min.x
-            || aabb.min.y > player_aabb.max.y
-            || aabb.max.y < player_aabb.min.y
-        {
-            continue;
-        }
+    let (min_x, max_x) = if aabb.min.y.floor() != aabb.max.y.floor() {
+        (aabb.min.x.floor(), aabb.max.x.ceil())
+    } else {
+        (
+            if walls[3].is_some() { pos.x } else { 0.0 },
+            if walls[1].is_some() {
+                pos.x + 1.0
+            } else {
+                GRID_WIDTH as f32
+            },
+        )
+    };
+    let (min_y, max_y) = if aabb.min.x.floor() != aabb.max.x.floor() {
+        (aabb.min.y.floor(), aabb.max.y.ceil())
+    } else {
+        (
+            if walls[2].is_some() { pos.y } else { 0.0 },
+            if walls[0].is_some() {
+                pos.y + 1.0
+            } else {
+                GRID_HEIGHT as f32
+            },
+        )
+    };
 
-        let collide_left = aabb.min.x < player_aabb.min.x;
-        let collide_right = aabb.min.x < player_aabb.max.x;
-        let collide_up = aabb.min.y < player_aabb.max.y;
-        let collide_down = aabb.min.y < player_aabb.min.y;
+    let d = Vec3::new(
+        PLAYER_WIDTH / 2.0 + PIXEL_WIDTH,
+        PLAYER_HEIGHT / 2.0 + PIXEL_HEIGHT,
+        0.0,
+    );
+    let new_translation = (player_transform.translation + direction).clamp(
+        Vec3::new(min_x, min_y, 0.) + d,
+        Vec3::new(max_x, max_y, 0.) - d,
+    );
 
-        if (collide_right && direction.x > 0.0) || (collide_left && direction.x < 0.0) {
-            direction.x = 0.0;
-        }
-
-        if (collide_up && direction.y > 0.0) || (collide_down && direction.y < 0.0) {
-            direction.y = 0.0;
-        }
-    }
-
-    player_transform.translation += direction;
+    player_transform.translation = new_translation;
 }
 
 pub fn close_on_esc(
