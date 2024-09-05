@@ -98,7 +98,7 @@ pub fn setup(mut commands: Commands) {
                             ..default()
                         },
                         transform: Transform {
-                            translation: Vec3::new(x as f32 + 0.5, y as f32 + 0.5, -1.),
+                            translation: Vec3::new(x as f32 + 0.5, y as f32 + 0.5, 4.),
                             scale: Vec3::new(1.0, 1.0, 1.0),
                             ..default()
                         },
@@ -108,7 +108,7 @@ pub fn setup(mut commands: Commands) {
                     Name::from(format!("Background {x} {y}")),
                 ))
                 .id();
-            sprites.push(id);
+            sprites.push(Some(id));
         }
     }
 
@@ -159,7 +159,6 @@ pub fn generate(
     mut commands: Commands,
     mut cursor_query: Query<&mut MazeCursor>,
     mut grid_query: Query<&mut Grid>,
-    mut background_query: Query<&mut Sprite, With<BackgroundSprite>>,
     mut next_state: ResMut<NextState<crate::GameState>>,
 ) {
     let mut num_completed = 0;
@@ -249,17 +248,8 @@ pub fn generate(
         cursor.sprites.push(sprite_id);
         grid.visit(&pos, cursor.num);
 
-        let colors = [
-            Color::srgb(0.2, 0.0, 0.0),
-            Color::srgb(0.0, 0.2, 0.0),
-            Color::srgb(0.2, 0.0, 0.2),
-            Color::srgb(0.0, 0.0, 0.2),
-        ];
-
-        if let Ok(mut sprite) =
-            background_query.get_mut(grid.sprites[(pos.y * GRID_WIDTH as i32 + pos.x) as usize])
-        {
-            sprite.color = colors[(cursor.num - 1) as usize];
+        if let Some(id) = grid.sprites[(pos.y * GRID_WIDTH as i32 + pos.x) as usize] {
+            commands.entity(id).despawn();
         }
 
         if let Some(id) = {

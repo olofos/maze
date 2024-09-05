@@ -28,7 +28,7 @@ pub enum Dir {
 pub struct Grid {
     pub visited: Vec<i32>,
     pub walls: Vec<Walls>,
-    pub sprites: Vec<Entity>,
+    pub sprites: Vec<Option<Entity>>,
 }
 
 impl Walls {
