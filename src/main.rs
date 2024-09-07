@@ -346,7 +346,7 @@ fn construct_tilemap(
                 }
             }
 
-            let mut tile_image = Image::new(
+            let mut tileset_image = Image::new(
                 Extent3d {
                     width: 64,
                     height: 64 * 16,
@@ -357,7 +357,8 @@ fn construct_tilemap(
                 image.texture_descriptor.format,
                 RenderAssetUsages::all(),
             );
-            tile_image.sampler = ImageSampler::nearest();
+            tileset_image.sampler = ImageSampler::nearest();
+            tileset_image.reinterpret_stacked_2d_as_array(16);
 
             let tilemap_buf = vec![3, 11, 9, 1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4];
 
@@ -369,19 +370,18 @@ fn construct_tilemap(
                 },
                 TextureDimension::D2,
                 tilemap_buf,
-                TextureFormat::R8Unorm,
+                TextureFormat::R8Uint,
                 RenderAssetUsages::all(),
             );
             tilemap_image.sampler = ImageSampler::nearest();
 
-            let image_handle = images.add(tile_image);
+            let image_handle = images.add(tileset_image);
             let tilemap_handle = images.add(tilemap_image);
             let mesh_handle = meshes.add(create_mesh());
             commands.spawn((MaterialMesh2dBundle {
                 mesh: mesh_handle.into(),
                 transform: Transform::default().with_translation(Vec3::new(0.0, 0.0, 4.0)),
                 material: materials.add(CustomMaterial {
-                    tile_index: 7.0,
                     tileset_texture: Some(image_handle),
                     tilemap_texture: Some(tilemap_handle),
                 }),
@@ -394,13 +394,10 @@ fn construct_tilemap(
 // This is the struct that will be passed to your shader
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 struct CustomMaterial {
-    #[uniform(0)]
-    tile_index: f32,
-    #[texture(1)]
+    #[texture(1, dimension = "2d_array")]
     #[sampler(2)]
     tileset_texture: Option<Handle<Image>>,
-    #[texture(3)]
-    #[sampler(4)]
+    #[texture(3, sample_type = "u_int")]
     tilemap_texture: Option<Handle<Image>>,
 }
 
