@@ -1,6 +1,13 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    render::{
+        render_asset::RenderAssetUsages,
+        render_resource::{Extent3d, TextureDimension, TextureFormat},
+        texture::ImageSampler,
+    },
+};
 
-use crate::{components::*, consts::*};
+use crate::{components::*, consts::*, TilemapMaterial};
 
 #[derive(Component)]
 pub struct MazeCursor {
@@ -9,9 +16,6 @@ pub struct MazeCursor {
     default: IVec2,
     num: i32,
 }
-
-#[derive(Component)]
-pub struct BackgroundSprite;
 
 pub fn setup(mut commands: Commands) {
     for num in 1..=NUM_CURSORS {
@@ -87,35 +91,9 @@ pub fn setup(mut commands: Commands) {
         }
     }
 
-    let mut sprites = vec![];
-    for y in 0..GRID_HEIGHT {
-        for x in 0..GRID_WIDTH {
-            let id = commands
-                .spawn((
-                    SpriteBundle {
-                        sprite: Sprite {
-                            color: Color::srgb(0.0, 0.0, 0.0),
-                            ..default()
-                        },
-                        transform: Transform {
-                            translation: Vec3::new(x as f32 + 0.5, y as f32 + 0.5, 4.),
-                            scale: Vec3::new(1.0, 1.0, 1.0),
-                            ..default()
-                        },
-                        ..default()
-                    },
-                    BackgroundSprite,
-                    Name::from(format!("Background {x} {y}")),
-                ))
-                .id();
-            sprites.push(Some(id));
-        }
-    }
-
     commands.spawn(Grid {
         visited: vec![0; GRID_WIDTH * GRID_HEIGHT],
         walls,
-        sprites,
     });
 
     for (x, y, name) in [
@@ -160,11 +138,13 @@ pub fn generate(
     mut cursor_query: Query<&mut MazeCursor>,
     mut grid_query: Query<&mut Grid>,
     mut next_state: ResMut<NextState<crate::GameState>>,
+    mut images: ResMut<Assets<Image>>,
+    tilemap_query: Query<&crate::TilemapHandle>,
+    mut materials: ResMut<Assets<TilemapMaterial>>,
 ) {
     let mut num_completed = 0;
+    let mut grid = grid_query.single_mut();
     for mut cursor in cursor_query.iter_mut() {
-        let mut grid = grid_query.single_mut();
-
         let old_pos = cursor.path.last().copied();
 
         let (pos, dir) = if let Some(old_pos) = &old_pos {
@@ -248,10 +228,6 @@ pub fn generate(
         cursor.sprites.push(sprite_id);
         grid.visit(&pos, cursor.num);
 
-        if let Some(id) = grid.sprites[(pos.y * GRID_WIDTH as i32 + pos.x) as usize] {
-            commands.entity(id).despawn();
-        }
-
         if let Some(id) = {
             if let Some(old_pos) = old_pos {
                 match dir {
@@ -273,7 +249,49 @@ pub fn generate(
             }
         }
     }
+
+    if let Ok(tilemap) = tilemap_query.get_single() {
+        let mat = materials.get_mut(&tilemap.material).unwrap();
+        let mut data = Vec::with_capacity(GRID_WIDTH * GRID_HEIGHT);
+        for y in 0..GRID_HEIGHT {
+            for x in 0..GRID_WIDTH {
+                let mut val = 0b1111;
+                if grid.walls[y * GRID_WIDTH + x].up.is_some() || y == GRID_HEIGHT - 1 {
+                    val &= !0b0001;
+                }
+                if grid.walls[y * GRID_WIDTH + x].right.is_some() || x == GRID_WIDTH - 1 {
+                    val &= !0b0010;
+                }
+                if grid.walls[y * GRID_WIDTH + x].down.is_some() || y == 0 {
+                    val &= !0b0100;
+                }
+                if grid.walls[y * GRID_WIDTH + x].left.is_some() || x == 0 {
+                    val &= !0b1000;
+                }
+
+                data.push(val);
+            }
+        }
+
+        let mut tilemap_image = Image::new(
+            Extent3d {
+                width: GRID_WIDTH as u32,
+                height: GRID_HEIGHT as u32,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            data,
+            TextureFormat::R8Uint,
+            RenderAssetUsages::all(),
+        );
+        tilemap_image.sampler = ImageSampler::nearest();
+
+        let tilemap_handle = images.add(tilemap_image);
+        mat.tilemap_texture = Some(tilemap_handle);
+    }
+
     if num_completed == NUM_CURSORS {
+        println!("Maze done");
         next_state.set(crate::GameState::Playing);
     }
 }

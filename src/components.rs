@@ -8,7 +8,7 @@ pub struct Player;
 #[derive(Component)]
 pub struct Goal;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Walls {
     pub up: Option<Entity>,
     pub down: Option<Entity>,
@@ -28,7 +28,6 @@ pub enum Dir {
 pub struct Grid {
     pub visited: Vec<i32>,
     pub walls: Vec<Walls>,
-    pub sprites: Vec<Option<Entity>>,
 }
 
 impl Walls {

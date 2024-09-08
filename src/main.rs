@@ -23,8 +23,8 @@ use crate::consts::*;
 
 #[derive(States, Debug, Default, Clone, PartialEq, Eq, Hash)]
 enum GameState {
-    #[default]
     MainMenu,
+    #[default]
     GeneratingMaze,
     Playing,
     LevelDone,
@@ -42,7 +42,7 @@ fn main() {
             }),
             ..default()
         }),
-        Material2dPlugin::<CustomMaterial>::default(),
+        Material2dPlugin::<TilemapMaterial>::default(),
     ))
     .insert_state(GameState::default())
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
@@ -93,18 +93,15 @@ fn check_goal(
 }
 
 fn create_mesh() -> Mesh {
+    let x = GRID_WIDTH as f32;
+    let y = GRID_HEIGHT as f32;
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     )
     .with_inserted_attribute(
         Mesh::ATTRIBUTE_POSITION,
-        vec![
-            [0.0, 0.0, 0.0],
-            [0.0, 16.0, 0.0],
-            [16.0, 16.0, 0.0],
-            [16.0, 0.0, 0.0],
-        ],
+        vec![[0.0, 0.0, 0.0], [0.0, y, 0.0], [x, y, 0.0], [x, 0.0, 0.0]],
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, {
         vec![[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]]
@@ -113,17 +110,16 @@ fn create_mesh() -> Mesh {
 }
 
 #[derive(Component)]
-struct TilemapHandle {
+struct TilesetHandle {
     handle: Handle<Image>,
 }
 
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<CustomMaterial>>,
-    images: Res<Assets<Image>>,
-) {
+#[derive(Component)]
+struct TilemapHandle {
+    material: Handle<TilemapMaterial>,
+}
+
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle {
         transform: Transform {
             translation: Vec3::new(GRID_WIDTH as f32 / 2., GRID_HEIGHT as f32 / 2., 0.0),
@@ -133,36 +129,24 @@ fn setup(
         ..default()
     });
 
-    let texture_handle = asset_server.load("tileset3.png");
-
-    println!("Texture handle: {:?}", texture_handle);
-    println!("Image: {:?}", images.get(&texture_handle));
-
-    commands.spawn(TilemapHandle {
-        handle: texture_handle.clone(),
+    commands.spawn(TilesetHandle {
+        handle: asset_server.load("tileset3.png"),
     });
-
-    // let mesh_handle = meshes.add(create_mesh());
-    // commands.spawn((MaterialMesh2dBundle {
-    //     mesh: mesh_handle.into(),
-    //     transform: Transform::default().with_translation(Vec3::new(0.0, 0.0, 4.0)),
-    //     material: materials.add(CustomMaterial {
-    //         color: LinearRgba::BLUE,
-    //         color_texture: Some(texture_handle),
-    //     }),
-    //     ..default()
-    // },));
 }
 
-fn blit_tile(src: &[u8], dst: &mut [u8], tile_num: usize, pos: (usize, usize), width: usize) {
-    const SUBTILE_WIDTH: usize = 16;
-    const SUBTILE_HEIGHT: usize = 16;
-    const CHANNELS: usize = 4;
+const SUBTILE_WIDTH: usize = 16;
+const SUBTILE_HEIGHT: usize = 16;
+const CHANNELS: usize = 4;
+const TILE_WIDTH: usize = PLAYFIELD_WIDTH as usize / GRID_WIDTH / 2;
+const TILE_HEIGHT: usize = PLAYFIELD_HEIGHT as usize / GRID_HEIGHT / 2;
+const NUM_TILES: usize = 16;
 
+fn blit_tile(src: &[u8], dst: &mut [u8], tile_num: usize, pos: (usize, usize), width: usize) {
     let (pos_x, pos_y) = pos;
     let src = &src[(tile_num) * (CHANNELS * SUBTILE_WIDTH * SUBTILE_HEIGHT)
         ..(tile_num + 1) * (CHANNELS * SUBTILE_WIDTH * SUBTILE_HEIGHT)];
-    let dst = &mut dst[(pos_y * CHANNELS * width + CHANNELS * pos_x)..];
+    let dst =
+        &mut dst[(pos_y * SUBTILE_HEIGHT * CHANNELS * width + CHANNELS * SUBTILE_WIDTH * pos_x)..];
 
     for y in 0..SUBTILE_HEIGHT {
         for x in 0..SUBTILE_WIDTH {
@@ -194,206 +178,233 @@ enum SubTile {
 
 fn construct_tilemap(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<CustomMaterial>>,
-    query: Query<(Entity, &TilemapHandle)>,
+    mut materials: ResMut<Assets<TilemapMaterial>>,
+    mut query: Query<(Entity, &mut TilesetHandle)>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    if let Ok((entity, handle)) = query.get_single() {
-        let handle = handle.handle.clone();
+    let Ok((entity, handle)) = query.get_single_mut() else {
+        return;
+    };
+    let handle = handle.handle.clone();
 
-        if let Some(image) = images.get_mut(&handle) {
-            commands.entity(entity).despawn();
-            let mut tile = vec![0u8; 64 * 64 * 16 * 4];
-            // for y in 0..4 {
-            //     for x in 0..4 {
-            //         blit_tile(&image.data, &mut tile, 4 * y + x, (x * 16, y * 16), 64);
-            //     }
-            // }
+    let Some(image) = images.get_mut(&handle) else {
+        return;
+    };
 
-            use SubTile::*;
+    commands.entity(entity).despawn();
+    let mut tile = vec![0u8; TILE_WIDTH * TILE_HEIGHT * NUM_TILES * CHANNELS];
 
-            let tiles_0 = [
-                [Full, Full, Full, Full],
-                [Full, Full, Full, Full],
-                [Full, Full, Full, Full],
-                [Full, Full, Full, Full],
-            ];
+    use SubTile::*;
 
-            let tiles_1 = [
-                [W, Empty, Empty, E],
-                [W, Empty, Empty, E],
-                [W, Empty, Empty, E],
-                [SW, S, S, SE],
-            ];
+    let max_x = TILE_WIDTH / SUBTILE_WIDTH - 1;
+    let max_y = TILE_HEIGHT / SUBTILE_HEIGHT - 1;
 
-            let tiles_2 = [
-                [NW, N, N, N],
-                [W, Empty, Empty, Empty],
-                [W, Empty, Empty, Empty],
-                [SW, S, S, S],
-            ];
-
-            let tiles_3 = [
-                [W, Empty, Empty, CornerNE],
-                [W, Empty, Empty, Empty],
-                [W, Empty, Empty, Empty],
-                [SW, S, S, S],
-            ];
-
-            let tiles_4 = [
-                [NW, N, N, NE],
-                [W, Empty, Empty, E],
-                [W, Empty, Empty, E],
-                [W, Empty, Empty, E],
-            ];
-
-            let tiles_5 = [
-                [W, Empty, Empty, E],
-                [W, Empty, Empty, E],
-                [W, Empty, Empty, E],
-                [W, Empty, Empty, E],
-            ];
-
-            let tiles_6 = [
-                [NW, N, N, N],
-                [W, Empty, Empty, Empty],
-                [W, Empty, Empty, Empty],
-                [W, Empty, Empty, CornerSE],
-            ];
-
-            let tiles_7 = [
-                [W, Empty, Empty, CornerNE],
-                [W, Empty, Empty, Empty],
-                [W, Empty, Empty, Empty],
-                [W, Empty, Empty, CornerSE],
-            ];
-
-            let tiles_8 = [
-                [N, N, N, NE],
-                [Empty, Empty, Empty, E],
-                [Empty, Empty, Empty, E],
-                [S, S, S, SE],
-            ];
-
-            let tiles_9 = [
-                [CornerNW, Empty, Empty, E],
-                [Empty, Empty, Empty, E],
-                [Empty, Empty, Empty, E],
-                [S, S, S, SE],
-            ];
-
-            let tiles_10 = [
-                [N, N, N, N],
-                [Empty, Empty, Empty, Empty],
-                [Empty, Empty, Empty, Empty],
-                [S, S, S, S],
-            ];
-
-            let tiles_11 = [
-                [CornerNW, Empty, Empty, CornerNE],
-                [Empty, Empty, Empty, Empty],
-                [Empty, Empty, Empty, Empty],
-                [S, S, S, S],
-            ];
-
-            let tiles_12 = [
-                [N, N, N, NE],
-                [Empty, Empty, Empty, E],
-                [Empty, Empty, Empty, E],
-                [CornerSW, Empty, Empty, E],
-            ];
-
-            let tiles_13 = [
-                [CornerNW, Empty, Empty, E],
-                [Empty, Empty, Empty, E],
-                [Empty, Empty, Empty, E],
-                [CornerSW, Empty, Empty, E],
-            ];
-
-            let tiles_14 = [
-                [N, N, N, N],
-                [Empty, Empty, Empty, Empty],
-                [Empty, Empty, Empty, Empty],
-                [CornerSW, Empty, Empty, CornerSE],
-            ];
-
-            let tiles_15 = [
-                [CornerNW, Empty, Empty, CornerNE],
-                [Empty, Empty, Empty, Empty],
-                [Empty, Empty, Empty, Empty],
-                [CornerSW, Empty, Empty, CornerSE],
-            ];
-
-            for (i, data) in [
-                tiles_0, tiles_1, tiles_2, tiles_3, tiles_4, tiles_5, tiles_6, tiles_7, tiles_8,
-                tiles_9, tiles_10, tiles_11, tiles_12, tiles_13, tiles_14, tiles_15,
-            ]
-            .iter()
-            .enumerate()
-            {
-                for y in 0..4 {
-                    for x in 0..4 {
-                        blit_tile(
-                            &image.data,
-                            &mut tile[i * 64 * 64 * 4..],
-                            data[4 - y - 1][x] as usize,
-                            (x * 16, y * 16),
-                            64,
-                        );
-                    }
-                }
-            }
-
-            let mut tileset_image = Image::new(
-                Extent3d {
-                    width: 64,
-                    height: 64 * 16,
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                tile,
-                image.texture_descriptor.format,
-                RenderAssetUsages::all(),
+    for x in 0..=max_x {
+        for y in 0..=max_y {
+            blit_tile(
+                &image.data,
+                &mut tile[0 * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+                Full as usize,
+                (x, y),
+                TILE_WIDTH,
             );
-            tileset_image.sampler = ImageSampler::nearest();
-            tileset_image.reinterpret_stacked_2d_as_array(16);
-
-            let tilemap_buf = vec![3, 11, 9, 1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4];
-
-            let mut tilemap_image = Image::new(
-                Extent3d {
-                    width: 4,
-                    height: 4,
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                tilemap_buf,
-                TextureFormat::R8Uint,
-                RenderAssetUsages::all(),
-            );
-            tilemap_image.sampler = ImageSampler::nearest();
-
-            let image_handle = images.add(tileset_image);
-            let tilemap_handle = images.add(tilemap_image);
-            let mesh_handle = meshes.add(create_mesh());
-            commands.spawn((MaterialMesh2dBundle {
-                mesh: mesh_handle.into(),
-                transform: Transform::default().with_translation(Vec3::new(0.0, 0.0, 4.0)),
-                material: materials.add(CustomMaterial {
-                    tileset_texture: Some(image_handle),
-                    tilemap_texture: Some(tilemap_handle),
-                }),
-                ..default()
-            },));
         }
     }
+
+    for tile_num in 1..NUM_TILES {
+        let ne = match tile_num & 0b0011 {
+            0b0000 => NE,
+            0b0001 => E,
+            0b0010 => N,
+            0b0011 => CornerNE,
+            _ => unreachable!(),
+        };
+        let se = match tile_num & 0b0110 {
+            0b0000 => SE,
+            0b0010 => S,
+            0b0100 => E,
+            0b0110 => CornerSE,
+            _ => unreachable!(),
+        };
+        let sw = match tile_num & 0b1100 {
+            0b0000 => SW,
+            0b0100 => W,
+            0b1000 => S,
+            0b1100 => CornerSW,
+            _ => unreachable!(),
+        };
+        let nw = match tile_num & 0b1001 {
+            0b0000 => NW,
+            0b1000 => N,
+            0b0001 => W,
+            0b1001 => CornerNW,
+            _ => unreachable!(),
+        };
+        let n = if (tile_num & 0b0001) == 0b0001 {
+            Empty
+        } else {
+            N
+        };
+        let e = if (tile_num & 0b0010) == 0b0010 {
+            Empty
+        } else {
+            E
+        };
+        let s = if (tile_num & 0b0100) == 0b0100 {
+            Empty
+        } else {
+            S
+        };
+        let w = if (tile_num & 0b1000) == 0b1000 {
+            Empty
+        } else {
+            W
+        };
+
+        blit_tile(
+            &image.data,
+            &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+            sw as usize,
+            (0, 0),
+            TILE_WIDTH,
+        );
+
+        blit_tile(
+            &image.data,
+            &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+            se as usize,
+            (max_x, 0),
+            TILE_WIDTH,
+        );
+
+        blit_tile(
+            &image.data,
+            &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+            nw as usize,
+            (0, max_y),
+            TILE_WIDTH,
+        );
+
+        blit_tile(
+            &image.data,
+            &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+            ne as usize,
+            (max_x, max_y),
+            TILE_WIDTH,
+        );
+
+        for x in 1..max_x {
+            blit_tile(
+                &image.data,
+                &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+                s as usize,
+                (x, 0),
+                TILE_WIDTH,
+            );
+
+            blit_tile(
+                &image.data,
+                &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+                n as usize,
+                (x, max_y),
+                TILE_WIDTH,
+            );
+        }
+
+        for y in 1..max_y {
+            blit_tile(
+                &image.data,
+                &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+                w as usize,
+                (0, y),
+                TILE_WIDTH,
+            );
+
+            blit_tile(
+                &image.data,
+                &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+                e as usize,
+                (max_x, y),
+                TILE_WIDTH,
+            );
+        }
+
+        for x in 1..max_x {
+            for y in 1..max_y {
+                blit_tile(
+                    &image.data,
+                    &mut tile[tile_num * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+                    Empty as usize,
+                    (x, y),
+                    TILE_WIDTH,
+                );
+            }
+        }
+    }
+
+    let mut tileset_image = Image::new(
+        Extent3d {
+            width: TILE_WIDTH as u32,
+            height: (TILE_HEIGHT * NUM_TILES) as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        tile,
+        image.texture_descriptor.format,
+        RenderAssetUsages::all(),
+    );
+    tileset_image.sampler = ImageSampler::nearest();
+    tileset_image.reinterpret_stacked_2d_as_array(NUM_TILES as u32);
+
+    let tilemap_buf = vec![0; GRID_WIDTH * GRID_HEIGHT];
+
+    let mut tilemap_image = Image::new(
+        Extent3d {
+            width: GRID_WIDTH as u32,
+            height: GRID_HEIGHT as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        tilemap_buf,
+        TextureFormat::R8Uint,
+        RenderAssetUsages::all(),
+    );
+    tilemap_image.sampler = ImageSampler::nearest();
+
+    let image_handle = images.add(tileset_image);
+    let tilemap_handle = images.add(tilemap_image);
+    let mesh_handle = meshes.add(create_mesh());
+
+    let material = materials.add(TilemapMaterial {
+        grid_size: Vec2::new(GRID_WIDTH as f32, GRID_HEIGHT as f32),
+        tileset_texture: Some(image_handle),
+        tilemap_texture: Some(tilemap_handle.clone()),
+    });
+
+    commands.spawn(TilemapHandle {
+        material: material.clone(),
+    });
+
+    commands.spawn((
+        MaterialMesh2dBundle {
+            mesh: mesh_handle.into(),
+            transform: Transform::default().with_translation(Vec3::new(0.0, 0.0, -5.0)),
+            material,
+            ..default()
+        },
+        // TileMap,
+    ));
 }
+
+#[derive(Component)]
+struct TileMap;
 
 // This is the struct that will be passed to your shader
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
-struct CustomMaterial {
+struct TilemapMaterial {
+    #[uniform(0)]
+    grid_size: Vec2,
     #[texture(1, dimension = "2d_array")]
     #[sampler(2)]
     tileset_texture: Option<Handle<Image>>,
@@ -403,7 +414,7 @@ struct CustomMaterial {
 
 /// The Material2d trait is very configurable, but comes with sensible defaults for all methods.
 /// You only need to implement functions for features that need non-default behavior. See the Material2d api docs for details!
-impl Material2d for CustomMaterial {
+impl Material2d for TilemapMaterial {
     fn fragment_shader() -> ShaderRef {
         "shaders/custom_material_2d.wgsl".into()
     }
