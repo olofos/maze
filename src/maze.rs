@@ -32,105 +32,12 @@ pub fn setup(mut commands: Commands) {
         ));
     }
 
-    let mut walls: Vec<Walls> = vec![
-        Walls {
-            up: None,
-            down: None,
-            left: None,
-            right: None
-        };
-        GRID_WIDTH * GRID_HEIGHT
-    ];
-
-    for x in 0..GRID_WIDTH {
-        for y in 0..GRID_HEIGHT - 1 {
-            let id = commands
-                .spawn((
-                    SpriteBundle {
-                        sprite: Sprite {
-                            color: Color::srgb(0.75, 0.75, 0.75),
-                            ..default()
-                        },
-                        transform: Transform {
-                            translation: Vec3::new(x as f32 + 0.5, y as f32 + 1.0, 1.),
-                            scale: Vec3::new(1.0, PIXEL_HEIGHT, 1.0),
-                            ..default()
-                        },
-                        ..default()
-                    },
-                    Name::from(format!("Horizontal Wall {x} {y}")),
-                ))
-                .id();
-
-            walls[(y * GRID_WIDTH + x) as usize].up = Some(id);
-            walls[((y + 1) * GRID_WIDTH + x) as usize].down = Some(id);
-        }
-    }
-    for x in 0..GRID_WIDTH - 1 {
-        for y in 0..GRID_HEIGHT {
-            let id = commands
-                .spawn((
-                    SpriteBundle {
-                        sprite: Sprite {
-                            color: Color::srgb(0.75, 0.75, 0.75),
-                            ..default()
-                        },
-                        transform: Transform {
-                            translation: Vec3::new(x as f32 + 1.0, y as f32 + 0.5, 1.),
-                            scale: Vec3::new(PIXEL_WIDTH, 1.0, 1.0),
-                            ..default()
-                        },
-                        ..default()
-                    },
-                    Name::from(format!("Vertical Wall {x} {y}")),
-                ))
-                .id();
-
-            walls[(y * GRID_WIDTH + x) as usize].right = Some(id);
-            walls[(y * GRID_WIDTH + x + 1) as usize].left = Some(id);
-        }
-    }
+    let walls: Vec<Walls> = vec![Walls::default(); GRID_WIDTH * GRID_HEIGHT];
 
     commands.spawn(Grid {
         visited: vec![0; GRID_WIDTH * GRID_HEIGHT],
         walls,
     });
-
-    for (x, y, name) in [
-        (0.0, 0.5, "Left"),
-        (1.0, 0.5, "Right"),
-        (0.5, 1.0, "Top"),
-        (0.5, 0.0, "Bottom"),
-    ] {
-        let scale = if y == 0.5 {
-            Vec3::new(
-                3.0 * PIXEL_WIDTH,
-                GRID_HEIGHT as f32 + 2.0 * PIXEL_HEIGHT,
-                1.0,
-            )
-        } else {
-            Vec3::new(
-                GRID_WIDTH as f32 + 2.0 * PIXEL_WIDTH,
-                3.0 * PIXEL_HEIGHT,
-                1.0,
-            )
-        };
-        commands.spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    color: Color::srgb(0.75, 0.75, 0.75),
-                    ..default()
-                },
-                transform: Transform {
-                    translation: Vec3::new(x * GRID_WIDTH as f32, y * GRID_HEIGHT as f32, 1.),
-                    scale,
-                    ..default()
-                },
-                ..default()
-            },
-            Name::from(format!("Outer Wall {name}")),
-        ));
-    }
 }
 
 pub fn generate(
@@ -228,24 +135,12 @@ pub fn generate(
         cursor.sprites.push(sprite_id);
         grid.visit(&pos, cursor.num);
 
-        if let Some(id) = {
-            if let Some(old_pos) = old_pos {
-                match dir {
-                    Some(dir) => {
-                        *grid.walls[(pos.y * GRID_WIDTH as i32 + pos.x) as usize]
-                            .get_mut(dir.reverse()) = None;
-                        grid.walls[(old_pos.y * GRID_WIDTH as i32 + old_pos.x) as usize]
-                            .get_mut(dir)
-                            .take()
-                    }
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        } {
-            if let Some(mut e) = commands.get_entity(id) {
-                e.despawn();
+        if let Some(old_pos) = old_pos {
+            if let Some(dir) = dir {
+                *grid.walls[(pos.y * GRID_WIDTH as i32 + pos.x) as usize].get_mut(dir.reverse()) =
+                    false;
+                *grid.walls[(old_pos.y * GRID_WIDTH as i32 + old_pos.x) as usize].get_mut(dir) =
+                    false;
             }
         }
     }
@@ -256,16 +151,16 @@ pub fn generate(
         for y in 0..GRID_HEIGHT {
             for x in 0..GRID_WIDTH {
                 let mut val = 0b1111;
-                if grid.walls[y * GRID_WIDTH + x].up.is_some() || y == GRID_HEIGHT - 1 {
+                if grid.walls[y * GRID_WIDTH + x].n || y == GRID_HEIGHT - 1 {
                     val &= !0b0001;
                 }
-                if grid.walls[y * GRID_WIDTH + x].right.is_some() || x == GRID_WIDTH - 1 {
+                if grid.walls[y * GRID_WIDTH + x].w || x == GRID_WIDTH - 1 {
                     val &= !0b0010;
                 }
-                if grid.walls[y * GRID_WIDTH + x].down.is_some() || y == 0 {
+                if grid.walls[y * GRID_WIDTH + x].s || y == 0 {
                     val &= !0b0100;
                 }
-                if grid.walls[y * GRID_WIDTH + x].left.is_some() || x == 0 {
+                if grid.walls[y * GRID_WIDTH + x].e || x == 0 {
                     val &= !0b1000;
                 }
 

@@ -21,6 +21,7 @@ mod maze;
 use crate::components::*;
 use crate::consts::*;
 
+#[allow(dead_code)]
 #[derive(States, Debug, Default, Clone, PartialEq, Eq, Hash)]
 enum GameState {
     MainMenu,
@@ -204,7 +205,7 @@ fn construct_tilemap(
         for y in 0..=max_y {
             blit_tile(
                 &image.data,
-                &mut tile[0 * TILE_WIDTH * TILE_HEIGHT * CHANNELS..],
+                &mut tile[0..],
                 Full as usize,
                 (x, y),
                 TILE_WIDTH,
@@ -397,9 +398,6 @@ fn construct_tilemap(
     ));
 }
 
-#[derive(Component)]
-struct TileMap;
-
 // This is the struct that will be passed to your shader
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 struct TilemapMaterial {
@@ -500,22 +498,14 @@ fn move_player(
             (1.0 - PLAYER_HEIGHT) / 2.0,
         ));
 
-    let min_x = if is_between.y || walls.left.is_some() {
-        pos.x
-    } else {
-        0.0
-    };
-    let max_x = if is_between.y || walls.right.is_some() {
+    let min_x = if is_between.y || walls.e { pos.x } else { 0.0 };
+    let max_x = if is_between.y || walls.w {
         pos.x + 1.0
     } else {
         GRID_WIDTH as f32
     };
-    let min_y = if is_between.x || walls.down.is_some() {
-        pos.y
-    } else {
-        0.0
-    };
-    let max_y = if is_between.x || walls.up.is_some() {
+    let min_y = if is_between.x || walls.s { pos.y } else { 0.0 };
+    let max_y = if is_between.x || walls.n {
         pos.y + 1.0
     } else {
         GRID_HEIGHT as f32

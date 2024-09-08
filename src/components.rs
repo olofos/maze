@@ -10,10 +10,10 @@ pub struct Goal;
 
 #[derive(Debug, Clone)]
 pub struct Walls {
-    pub up: Option<Entity>,
-    pub down: Option<Entity>,
-    pub left: Option<Entity>,
-    pub right: Option<Entity>,
+    pub n: bool,
+    pub s: bool,
+    pub e: bool,
+    pub w: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,13 +30,24 @@ pub struct Grid {
     pub walls: Vec<Walls>,
 }
 
+impl Default for Walls {
+    fn default() -> Self {
+        Self {
+            n: true,
+            s: true,
+            e: true,
+            w: true,
+        }
+    }
+}
+
 impl Walls {
-    pub fn get_mut(&mut self, dir: Dir) -> &mut Option<Entity> {
+    pub fn get_mut(&mut self, dir: Dir) -> &mut bool {
         match dir {
-            Dir::Up => &mut self.up,
-            Dir::Down => &mut self.down,
-            Dir::Left => &mut self.left,
-            Dir::Right => &mut self.right,
+            Dir::Up => &mut self.n,
+            Dir::Down => &mut self.s,
+            Dir::Left => &mut self.e,
+            Dir::Right => &mut self.w,
         }
     }
 }
