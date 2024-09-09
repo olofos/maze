@@ -70,7 +70,7 @@ pub fn expand(image: &Image) -> Image {
 
     for x in 0..=max_x {
         for y in 0..=max_y {
-            blit_tile(src, dst, Full, 0, (x, y));
+            blit_tile(src, dst, Full, NUM_TILES - 1, (x, y));
         }
     }
 
@@ -79,10 +79,10 @@ pub fn expand(image: &Image) -> Image {
         let se = [SE, S, E, CornerSE][(dst_tile_num & 0b0110) >> 1];
         let sw = [SW, W, S, CornerSW][(dst_tile_num & 0b1100) >> 2];
         let nw = [NW, N, W, CornerNW][(dst_tile_num & 0b1000) >> 3 | (dst_tile_num & 0b0001) << 1];
-        let n = [Empty, N][dst_tile_num & 0b001];
-        let e = [Empty, E][(dst_tile_num & 0b010) >> 1];
-        let s = [Empty, S][(dst_tile_num & 0b100) >> 2];
-        let w = [Empty, W][(dst_tile_num & 0b1000) >> 3];
+        let n = [N, Empty][dst_tile_num & 0b001];
+        let e = [E, Empty][(dst_tile_num & 0b010) >> 1];
+        let s = [S, Empty][(dst_tile_num & 0b100) >> 2];
+        let w = [W, Empty][(dst_tile_num & 0b1000) >> 3];
 
         blit_tile(src, dst, sw, dst_tile_num, (0, 0));
         blit_tile(src, dst, se, dst_tile_num, (max_x, 0));
