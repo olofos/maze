@@ -5,12 +5,13 @@ use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
-use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle, Mesh2dHandle};
+use bevy::sprite::{Material2d, Material2dPlugin};
 use bevy::time::common_conditions::on_timer;
 
 use bevy::window::PresentMode;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use tilemap::Tilemap;
 
 mod components;
 mod consts;
@@ -35,13 +36,20 @@ enum GameState {
 
 fn main() {
     let mut app = App::new();
+
+    let present_mode = if cfg!(target_arch = "wasm32") {
+        PresentMode::default()
+    } else {
+        PresentMode::Immediate
+    };
+
     app.add_plugins((
         DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Maze".to_string(),
                 resizable: false,
                 resolution: (SCREEN_WIDTH, SCREEN_HEIGHT).into(),
-                present_mode: PresentMode::Immediate,
+                present_mode,
                 ..default()
             }),
             ..default()
@@ -49,6 +57,7 @@ fn main() {
         Material2dPlugin::<TilemapMaterial>::default(),
     ))
     .insert_state(GameState::default())
+    .add_systems(FixedUpdate, tilemap::update_tilemaps)
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
     .add_systems(OnEnter(GameState::Playing), setup_player_and_goal)
@@ -66,7 +75,9 @@ fn main() {
     )
     .add_systems(FixedUpdate, check_goal.run_if(in_state(GameState::Playing)))
     .add_systems(FixedUpdate, construct_tilemap)
-    .add_systems(FixedUpdate, tilemap::update_tilemaps);
+    .add_systems(FixedUpdate, maze::update_tilemap)
+    // semicolon
+    ;
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(WorldInspectorPlugin::new().run_if(
         bevy::input::common_conditions::input_toggle_active(false, KeyCode::Backquote),
@@ -119,11 +130,6 @@ struct TilesetHandle {
     handle: Handle<Image>,
 }
 
-#[derive(Component)]
-struct Tilemap {
-    material: Handle<TilemapMaterial>,
-}
-
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle {
         transform: Transform {
@@ -141,9 +147,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn construct_tilemap(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<TilemapMaterial>>,
-    mut color_materials: ResMut<Assets<ColorMaterial>>,
     mut query: Query<(Entity, &mut TilesetHandle)>,
     mut images: ResMut<Assets<Image>>,
 ) {
@@ -157,33 +160,13 @@ fn construct_tilemap(
     };
 
     let tileset_image = tileset::expand(image);
-    let image_handle = images.add(tileset_image);
-    let mesh_handle = meshes.add(create_mesh());
-    let mesh: Mesh2dHandle = mesh_handle.into();
 
-    let material = materials.add(TilemapMaterial {
-        grid_size: Vec2::new(GRID_WIDTH as f32, GRID_HEIGHT as f32),
-        tileset_texture: Some(image_handle),
-        tilemap_texture: None,
-    });
-
-    commands.spawn(Tilemap {
-        material: material.clone(),
-    });
-
-    commands.spawn((MaterialMesh2dBundle {
-        mesh: mesh.clone(),
-        transform: Transform::default().with_translation(Vec3::new(0.0, 0.0, 5.0)),
-        material,
-        ..default()
-    },));
-
-    commands.spawn((MaterialMesh2dBundle {
-        mesh,
-        transform: Transform::default().with_translation(Vec3::new(0.0, 0.0, -10.0)),
-        material: color_materials.add(ColorMaterial::from(Color::srgb_u8(0x7f, 0xc2, 0x6d))),
-        ..default()
-    },));
+    commands.spawn(Tilemap::new(
+        images.add(tileset_image),
+        GRID_WIDTH as u32,
+        GRID_HEIGHT as u32,
+        5.0,
+    ));
 
     commands.entity(entity).despawn();
 }
@@ -192,7 +175,7 @@ fn construct_tilemap(
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 struct TilemapMaterial {
     #[uniform(0)]
-    grid_size: Vec2,
+    grid_size: Vec4,
     #[texture(1, dimension = "2d_array")]
     #[sampler(2)]
     tileset_texture: Option<Handle<Image>>,

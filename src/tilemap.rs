@@ -5,66 +5,76 @@ use bevy::{
         render_resource::{Extent3d, TextureDimension, TextureFormat},
         texture::ImageSampler,
     },
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 
-use crate::{components::*, consts::*, TilemapMaterial};
+use crate::TilemapMaterial;
 
-pub fn update_tilemaps(
-    mut grid_query: Query<&mut Grid>,
-    mut images: ResMut<Assets<Image>>,
-    tilemap_query: Query<&crate::Tilemap>,
-    mut materials: ResMut<Assets<TilemapMaterial>>,
-) {
-    let Ok(tilemap) = tilemap_query.get_single() else {
-        return;
-    };
+#[derive(Component)]
+pub struct Tilemap {
+    material: Handle<TilemapMaterial>,
+    tileset: Handle<Image>,
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>,
+    z: f32,
+}
 
-    let grid = grid_query.single_mut();
-
-    let mut data = Vec::with_capacity(GRID_WIDTH * GRID_HEIGHT);
-
-    for y in 0..GRID_HEIGHT {
-        for x in 0..GRID_WIDTH {
-            if grid.visited[y * GRID_WIDTH + x] == 0
-                && !(x == 0 && y == 0)
-                && !(x == GRID_WIDTH - 1 && y == GRID_HEIGHT - 1)
-            {
-                data.push(17)
-            } else {
-                let mut val = 0b1111;
-                if grid.walls[y * GRID_WIDTH + x].n || y == GRID_HEIGHT - 1 {
-                    val &= !0b0001;
-                }
-                if grid.walls[y * GRID_WIDTH + x].w || x == GRID_WIDTH - 1 {
-                    val &= !0b0010;
-                }
-                if grid.walls[y * GRID_WIDTH + x].s || y == 0 {
-                    val &= !0b0100;
-                }
-                if grid.walls[y * GRID_WIDTH + x].e || x == 0 {
-                    val &= !0b1000;
-                }
-
-                data.push(val);
-            }
+impl Tilemap {
+    pub fn new(tileset: Handle<Image>, width: u32, height: u32, z: f32) -> Self {
+        Self {
+            material: Handle::default(),
+            tileset,
+            width,
+            height,
+            data: vec![0; (width * height) as usize],
+            z,
         }
     }
+}
 
-    let mat = materials.get_mut(&tilemap.material).unwrap();
+pub fn update_tilemaps(
+    mut query: Query<&mut Tilemap, Changed<Tilemap>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<TilemapMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    for mut tilemap in query.iter_mut() {
+        let mut tilemap_image = Image::new(
+            Extent3d {
+                width: tilemap.width as u32,
+                height: tilemap.height as u32,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            tilemap.data.clone(),
+            TextureFormat::R8Uint,
+            RenderAssetUsages::all(),
+        );
+        tilemap_image.sampler = ImageSampler::nearest();
 
-    let mut tilemap_image = Image::new(
-        Extent3d {
-            width: GRID_WIDTH as u32,
-            height: GRID_HEIGHT as u32,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        data,
-        TextureFormat::R8Uint,
-        RenderAssetUsages::all(),
-    );
-    tilemap_image.sampler = ImageSampler::nearest();
+        let tilemap_handle = images.add(tilemap_image);
 
-    let tilemap_handle = images.add(tilemap_image);
-    mat.tilemap_texture = Some(tilemap_handle);
+        if let Some(material) = materials.get_mut(&tilemap.material) {
+            material.tilemap_texture = Some(tilemap_handle.clone());
+        } else {
+            let material = materials.add(crate::TilemapMaterial {
+                grid_size: Vec4::new(tilemap.width as f32, tilemap.height as f32, 0.0, 0.0),
+                tileset_texture: Some(tilemap.tileset.clone()),
+                tilemap_texture: Some(tilemap_handle),
+            });
+            tilemap.material = material.clone();
+
+            let mesh_handle = meshes.add(crate::create_mesh());
+            let mesh: Mesh2dHandle = mesh_handle.into();
+
+            commands.spawn((MaterialMesh2dBundle {
+                mesh,
+                transform: Transform::default().with_translation(Vec3::new(0.0, 0.0, tilemap.z)),
+                material,
+                ..default()
+            },));
+        }
+    }
 }
