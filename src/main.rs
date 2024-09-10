@@ -55,7 +55,8 @@ fn main() {
         Material2dPlugin::<tilemap::TilemapMaterial>::default(),
     ))
     .insert_state(GameState::default())
-    .add_systems(FixedUpdate, tilemap::update_tilemaps)
+    .add_systems(Update, tilemap::construct_materials)
+    .add_systems(Update, tilemap::update_tilemaps)
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
     .add_systems(OnEnter(GameState::Playing), setup_player_and_goal)
