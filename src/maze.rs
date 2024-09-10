@@ -143,7 +143,7 @@ pub fn generate(
 
 pub fn update_tilemap(
     grid_query: Query<&Grid, Changed<Grid>>,
-    mut tilemap_query: Query<&mut crate::tilemap::Tilemap>,
+    mut tilemap_query: Query<&mut crate::tilemap::Tilemap, With<crate::Trees>>,
 ) {
     let Ok(mut tilemap) = tilemap_query.get_single_mut() else {
         return;

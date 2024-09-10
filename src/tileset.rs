@@ -118,7 +118,6 @@ pub fn expand(image: &Image) -> Image {
         RenderAssetUsages::all(),
     );
     tileset_image.sampler = ImageSampler::nearest();
-    tileset_image.reinterpret_stacked_2d_as_array(NUM_TILES as u32);
 
     tileset_image
 }

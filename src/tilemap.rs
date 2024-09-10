@@ -36,7 +36,7 @@ pub struct TilemapMaterial {
 impl Tilemap {
     pub fn new(tileset: Handle<Image>, width: u32, height: u32, z: f32) -> Self {
         Self {
-            material: Handle::default(),
+            material: Handle::Weak(AssetId::invalid()),
             tileset,
             width,
             height,

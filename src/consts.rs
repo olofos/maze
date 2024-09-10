@@ -1,5 +1,5 @@
-pub const GRID_WIDTH: usize = 16;
-pub const GRID_HEIGHT: usize = 16;
+pub const GRID_WIDTH: usize = 8;
+pub const GRID_HEIGHT: usize = 8;
 pub const MARGIN: f32 = 16.0;
 pub const PLAYFIELD_WIDTH: f32 = 1024.0;
 pub const PLAYFIELD_HEIGHT: f32 = 1024.0;

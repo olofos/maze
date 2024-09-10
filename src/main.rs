@@ -8,6 +8,7 @@ use bevy::time::common_conditions::on_timer;
 use bevy::window::PresentMode;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use rand::Rng;
 use tilemap::Tilemap;
 
 mod components;
@@ -73,6 +74,7 @@ fn main() {
     .add_systems(FixedUpdate, check_goal.run_if(in_state(GameState::Playing)))
     .add_systems(FixedUpdate, construct_tilemap)
     .add_systems(FixedUpdate, maze::update_tilemap)
+    .add_systems(FixedUpdate, generate_bg.run_if(on_timer(Duration::from_millis(500))))
     // semicolon
     ;
     #[cfg(not(target_arch = "wasm32"))]
@@ -106,8 +108,12 @@ fn check_goal(
 }
 
 #[derive(Component)]
-struct TilesetHandle {
-    handle: Handle<Image>,
+struct TilemapLoader {
+    tileset: Handle<Image>,
+    expand: bool,
+    grid_size: (u32, u32),
+    num_tiles: u32,
+    z: f32,
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -120,35 +126,84 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ..default()
     });
 
-    commands.spawn(TilesetHandle {
-        handle: asset_server.load("tileset4.png"),
-    });
+    commands.spawn((
+        TilemapLoader {
+            tileset: asset_server.load("tileset4.png"),
+            expand: true,
+            grid_size: (GRID_WIDTH as u32, GRID_HEIGHT as u32),
+            num_tiles: 17,
+            z: 5.0,
+        },
+        Trees,
+    ));
+
+    commands.spawn((
+        TilemapLoader {
+            tileset: asset_server.load("bg.png"),
+            expand: false,
+            grid_size: (32, 32),
+            num_tiles: 7,
+            z: -5.0,
+        },
+        Ground,
+    ));
 }
+
+#[derive(Component)]
+struct Trees;
+
+#[derive(Component)]
+struct Ground;
 
 fn construct_tilemap(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut TilesetHandle)>,
+    query: Query<(Entity, &TilemapLoader), Without<Tilemap>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let Ok((entity, handle)) = query.get_single_mut() else {
+    for (entity, loader) in query.iter() {
+        println!("Load {entity}");
+        let tileset = loader.tileset.clone();
+
+        let Some(image) = images.get_mut(&tileset) else {
+            continue;
+        };
+
+        let mut tileset_image = if loader.expand {
+            tileset::expand(image)
+        } else {
+            image.clone()
+        };
+
+        if tileset_image.texture_descriptor.size.depth_or_array_layers == 1 {
+            tileset_image.reinterpret_stacked_2d_as_array(loader.num_tiles);
+        }
+
+        commands.entity(entity).insert(Tilemap::new(
+            images.add(tileset_image),
+            loader.grid_size.0,
+            loader.grid_size.1,
+            loader.z,
+        ));
+    }
+}
+
+fn generate_bg(mut commands: Commands, mut query: Query<(Entity, &mut Tilemap), With<Ground>>) {
+    let Ok((entity, mut tilemap)) = query.get_single_mut() else {
         return;
     };
-    let handle = handle.handle.clone();
 
-    let Some(image) = images.get(&handle) else {
-        return;
-    };
+    let width = tilemap.width;
+    let height = tilemap.height;
 
-    let tileset_image = tileset::expand(image);
+    let mut rng = rand::thread_rng();
 
-    commands.spawn(Tilemap::new(
-        images.add(tileset_image),
-        GRID_WIDTH as u32,
-        GRID_HEIGHT as u32,
-        5.0,
-    ));
+    for x in 0..width {
+        for y in 0..height {
+            tilemap.data[(y * width + x) as usize] = rng.gen_range(-17i32..7).clamp(0, 7) as u8;
+        }
+    }
 
-    commands.entity(entity).despawn();
+    commands.entity(entity).remove::<Ground>();
 }
 
 fn setup_player_and_goal(mut commands: Commands, asset_server: Res<AssetServer>) {
