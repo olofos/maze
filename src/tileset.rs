@@ -57,7 +57,7 @@ fn blit_tile(
     }
 }
 
-pub fn expand(image: &Image) -> Image {
+pub fn expand(image: Image) -> Image {
     use SubTile::*;
 
     let max_x = TILE_WIDTH / SUBTILE_WIDTH - 1;

@@ -74,6 +74,7 @@ fn main() {
     .add_systems(FixedUpdate, check_goal.run_if(in_state(GameState::Playing)))
     .add_systems(FixedUpdate, construct_tilemap)
     .add_systems(FixedUpdate, maze::update_tilemap)
+    .add_systems(Update, expand_image_array)
     .add_systems(FixedUpdate, generate_bg.run_if(on_timer(Duration::from_millis(500))))
     // semicolon
     ;
@@ -113,7 +114,6 @@ struct TilemapLoader {
     expand: bool,
     grid_size: (u32, u32),
     num_tiles: u32,
-    z: f32,
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -132,19 +132,18 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             expand: true,
             grid_size: (GRID_WIDTH as u32, GRID_HEIGHT as u32),
             num_tiles: 17,
-            z: 5.0,
         },
+        Transform::default().with_translation(Vec3::new(0.0, 0.0, 5.0)),
         Trees,
     ));
 
     commands.spawn((
-        TilemapLoader {
-            tileset: asset_server.load("bg.png"),
-            expand: false,
-            grid_size: (32, 32),
+        ImageArray {
+            image: asset_server.load("bg.png"),
             num_tiles: 7,
-            z: -5.0,
         },
+        Tilemap::new(32, 32),
+        Transform::default().with_translation(Vec3::new(0.0, 0.0, -5.0)),
         Ground,
     ));
 }
@@ -155,6 +154,30 @@ struct Trees;
 #[derive(Component)]
 struct Ground;
 
+#[derive(Component)]
+struct ImageArray {
+    image: Handle<Image>,
+    num_tiles: u32,
+}
+
+fn expand_image_array(
+    mut commands: Commands,
+    query: Query<(Entity, &ImageArray)>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    for (entity, image_array) in query.iter() {
+        let Some(image) = images.get_mut(&image_array.image) else {
+            continue;
+        };
+        image.reinterpret_stacked_2d_as_array(image_array.num_tiles);
+        let handle = image_array.image.clone();
+        commands
+            .entity(entity)
+            .remove::<ImageArray>()
+            .insert(handle);
+    }
+}
+
 fn construct_tilemap(
     mut commands: Commands,
     query: Query<(Entity, &TilemapLoader), Without<Tilemap>>,
@@ -164,25 +187,23 @@ fn construct_tilemap(
         println!("Load {entity}");
         let tileset = loader.tileset.clone();
 
-        let Some(image) = images.get_mut(&tileset) else {
+        let Some(image) = images.remove(&tileset) else {
             continue;
         };
 
         let mut tileset_image = if loader.expand {
             tileset::expand(image)
         } else {
-            image.clone()
+            image
         };
 
         if tileset_image.texture_descriptor.size.depth_or_array_layers == 1 {
             tileset_image.reinterpret_stacked_2d_as_array(loader.num_tiles);
         }
 
-        commands.entity(entity).insert(Tilemap::new(
+        commands.entity(entity).insert((
             images.add(tileset_image),
-            loader.grid_size.0,
-            loader.grid_size.1,
-            loader.z,
+            Tilemap::new(loader.grid_size.0, loader.grid_size.1),
         ));
     }
 }

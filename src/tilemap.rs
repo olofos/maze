@@ -6,19 +6,16 @@ use bevy::{
         render_resource::{AsBindGroup, Extent3d, ShaderRef, TextureDimension, TextureFormat},
         texture::ImageSampler,
     },
-    sprite::{Material2d, MaterialMesh2dBundle, Mesh2dHandle},
+    sprite::{Material2d, Mesh2dHandle},
 };
 
 use crate::consts::{GRID_HEIGHT, GRID_WIDTH};
 
 #[derive(Component)]
 pub struct Tilemap {
-    material: Handle<TilemapMaterial>,
-    tileset: Handle<Image>,
     pub width: u32,
     pub height: u32,
     pub data: Vec<u8>,
-    z: f32,
 }
 
 // This is the struct that will be passed to your shader
@@ -34,26 +31,31 @@ pub struct TilemapMaterial {
 }
 
 impl Tilemap {
-    pub fn new(tileset: Handle<Image>, width: u32, height: u32, z: f32) -> Self {
+    pub fn new(width: u32, height: u32) -> Self {
         Self {
-            material: Handle::Weak(AssetId::invalid()),
-            tileset,
             width,
             height,
             data: vec![0; (width * height) as usize],
-            z,
         }
     }
 }
 
 pub fn update_tilemaps(
-    mut query: Query<&mut Tilemap, Changed<Tilemap>>,
     mut commands: Commands,
+    query: Query<
+        (
+            Entity,
+            &Tilemap,
+            Option<&Handle<TilemapMaterial>>,
+            &Handle<Image>,
+        ),
+        Changed<Tilemap>,
+    >,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TilemapMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    for mut tilemap in query.iter_mut() {
+    for (entity, tilemap, material, tileset) in query.iter() {
         let mut tilemap_image = Image::new(
             Extent3d {
                 width: tilemap.width,
@@ -69,25 +71,29 @@ pub fn update_tilemaps(
 
         let tilemap_handle = images.add(tilemap_image);
 
-        if let Some(material) = materials.get_mut(&tilemap.material) {
-            material.tilemap_texture = Some(tilemap_handle.clone());
+        if let Some(material) = material {
+            let Some(material) = materials.get_mut(material) else {
+                continue;
+            };
+            material.tilemap_texture = Some(tilemap_handle);
         } else {
             let material = materials.add(TilemapMaterial {
                 grid_size: Vec4::new(tilemap.width as f32, tilemap.height as f32, 0.0, 0.0),
-                tileset_texture: Some(tilemap.tileset.clone()),
+                tileset_texture: Some(tileset.clone()),
                 tilemap_texture: Some(tilemap_handle),
             });
-            tilemap.material = material.clone();
 
             let mesh_handle = meshes.add(create_mesh());
             let mesh: Mesh2dHandle = mesh_handle.into();
 
-            commands.spawn((MaterialMesh2dBundle {
+            commands.entity(entity).insert((
                 mesh,
-                transform: Transform::default().with_translation(Vec3::new(0.0, 0.0, tilemap.z)),
                 material,
-                ..default()
-            },));
+                GlobalTransform::default(),
+                Visibility::default(),
+                InheritedVisibility::default(),
+                ViewVisibility::default(),
+            ));
         }
     }
 }
