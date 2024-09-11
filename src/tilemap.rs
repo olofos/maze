@@ -11,10 +11,9 @@ use bevy::{
 
 use crate::consts::{GRID_HEIGHT, GRID_WIDTH};
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct Tilemap {
-    pub width: u32,
-    pub height: u32,
+    pub grid_size: UVec2,
     pub data: Vec<u8>,
 }
 
@@ -38,14 +37,18 @@ pub struct TilemapMaterial {
 
 pub fn plugin(app: &mut App) {
     app.add_plugins(Material2dPlugin::<TilemapMaterial>::default())
-        .add_systems(Update, (construct_materials, update_tilemaps));
+        .register_type::<Tilemap>()
+        .add_systems(
+            Update,
+            (construct_materials, update_tilemaps)
+                .run_if(in_state(crate::states::AppState::InGame)),
+        );
 }
 
 impl Tilemap {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
-            width,
-            height,
+            grid_size: UVec2::new(width, height),
             data: vec![0; (width * height) as usize],
         }
     }
@@ -79,8 +82,8 @@ fn construct_materials(
     for (entity, tilemap, tileset) in query.iter() {
         let mut tilemap_image = Image::new(
             Extent3d {
-                width: tilemap.width,
-                height: tilemap.height,
+                width: tilemap.grid_size.x,
+                height: tilemap.grid_size.y,
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
@@ -98,12 +101,15 @@ fn construct_materials(
         tileset_image.reinterpret_stacked_2d_as_array(tileset.num_tiles);
 
         let material = materials.add(TilemapMaterial {
-            grid_size: Vec4::new(tilemap.width as f32, tilemap.height as f32, 0.0, 0.0),
+            grid_size: tilemap.grid_size.as_vec2().xyxy(),
             tileset_texture: tileset.image.clone(),
             tilemap_texture: tilemap_handle,
         });
 
-        let mesh_handle = meshes.add(create_mesh());
+        let mesh_handle = meshes.add(create_mesh(UVec2::new(
+            GRID_WIDTH as u32,
+            GRID_HEIGHT as u32,
+        )));
         let mesh: Mesh2dHandle = mesh_handle.into();
 
         commands
@@ -128,9 +134,9 @@ impl Material2d for TilemapMaterial {
     }
 }
 
-fn create_mesh() -> Mesh {
-    let x = GRID_WIDTH as f32;
-    let y = GRID_HEIGHT as f32;
+fn create_mesh(size: UVec2) -> Mesh {
+    let x: f32 = size.x as f32;
+    let y = size.y as f32;
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,

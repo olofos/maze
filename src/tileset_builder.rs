@@ -134,7 +134,6 @@ pub fn construct_tilemap(
     mut images: ResMut<Assets<Image>>,
 ) {
     for (entity, loader) in query.iter() {
-        println!("Load {entity}");
         let tileset = loader.tileset.clone();
 
         let Some(image) = images.remove(&tileset) else {

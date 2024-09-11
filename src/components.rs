@@ -8,7 +8,7 @@ pub struct Player;
 #[derive(Component)]
 pub struct Goal;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Reflect)]
 pub struct Walls {
     pub n: bool,
     pub s: bool,
@@ -24,7 +24,7 @@ pub enum Dir {
     Right,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct Grid {
     pub visited: Vec<i32>,
     pub walls: Vec<Walls>,

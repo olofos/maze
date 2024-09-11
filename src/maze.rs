@@ -40,7 +40,7 @@ pub fn generate(
     mut commands: Commands,
     mut cursor_query: Query<&mut MazeCursor>,
     mut grid_query: Query<&mut Grid>,
-    mut next_state: ResMut<NextState<crate::GameState>>,
+    mut next_state: ResMut<NextState<crate::GamePlayState>>,
 ) {
     let mut num_completed = 0;
     let mut grid = grid_query.single_mut();
@@ -140,7 +140,7 @@ pub fn generate(
 
     if num_completed == NUM_CURSORS {
         println!("Maze done");
-        next_state.set(crate::GameState::Playing);
+        next_state.set(crate::GamePlayState::Playing);
     }
 }
 

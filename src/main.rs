@@ -8,26 +8,18 @@ use bevy::window::PresentMode;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rand::Rng;
+use states::{AppState, GamePlayState};
 use tilemap::Tilemap;
 
 mod components;
 mod consts;
 mod maze;
+mod states;
 mod tilemap;
 mod tileset_builder;
 
 use crate::components::*;
 use crate::consts::*;
-
-#[allow(dead_code)]
-#[derive(States, Debug, Default, Clone, PartialEq, Eq, Hash)]
-enum GameState {
-    MainMenu,
-    #[default]
-    GeneratingMaze,
-    Playing,
-    LevelDone,
-}
 
 // Background color: b28d70
 
@@ -51,28 +43,26 @@ fn main() {
             }),
             ..default()
         }),
-        tilemap::plugin
+        tilemap::plugin,
+        states::plugin,
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
-    .insert_state(GameState::default())
-
-    .add_systems(OnEnter(GameState::GeneratingMaze), maze::setup)
-    .add_systems(Update, maze::update_tilemap)
+    .register_type::<components::Grid>()
     .add_systems(Startup, setup)
-    .add_systems(OnEnter(GameState::Playing), setup_player_and_goal)
-    .add_systems(
-        Update,
-        move_player.run_if(in_state(GameState::Playing)),
-    )
-    .add_systems(
-        Update,
+    .add_systems(OnEnter(GamePlayState::GeneratingMaze), maze::setup)
+    .add_systems(OnEnter(GamePlayState::Playing), setup_player_and_goal)
+    .add_systems(Update, (
+        tileset_builder::construct_tilemap,
         maze::generate
-        .run_if(in_state(GameState::GeneratingMaze))
         .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS))),
+        
+        generate_bg
+    ).run_if(in_state(GamePlayState::GeneratingMaze)))
+    .add_systems(Update, maze::update_tilemap.run_if(in_state(AppState::InGame)))
+    .add_systems(
+        Update,
+        (move_player, check_goal).run_if(in_state(GamePlayState::Playing)),
     )
-    .add_systems(Update, check_goal.run_if(in_state(GameState::Playing)))
-    .add_systems(Update, tileset_builder::construct_tilemap)
-    .add_systems(Update, generate_bg.run_if(on_timer(Duration::from_millis(500))))
     // semicolon
     ;
     #[cfg(not(target_arch = "wasm32"))]
@@ -97,13 +87,13 @@ fn check_goal(
     mut ev_appexit: EventWriter<AppExit>,
     player_query: Query<&Transform, (With<Player>, Without<Goal>)>,
     goal_query: Query<&Transform, (Without<Player>, With<Goal>)>,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<GamePlayState>>,
 ) {
     let player_transform = player_query.single();
     let goal_transform = goal_query.single();
 
     if collide(player_transform, goal_transform) {
-        next_state.set(GameState::LevelDone);
+        next_state.set(GamePlayState::LevelDone);
         ev_appexit.send(AppExit::Success);
     }
 }
@@ -151,8 +141,8 @@ fn generate_bg(mut commands: Commands, mut query: Query<(Entity, &mut Tilemap), 
         return;
     };
 
-    let width = tilemap.width;
-    let height = tilemap.height;
+    let width = tilemap.grid_size.x;
+    let height = tilemap.grid_size.y;
 
     let mut rng = rand::thread_rng();
 
