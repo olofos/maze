@@ -27,10 +27,13 @@ pub fn setup(mut commands: Commands) {
 
     let walls: Vec<Walls> = vec![Walls::default(); GRID_WIDTH * GRID_HEIGHT];
 
-    commands.spawn(Grid {
-        visited: vec![0; GRID_WIDTH * GRID_HEIGHT],
-        walls,
-    });
+    commands.spawn((
+        Grid {
+            visited: vec![0; GRID_WIDTH * GRID_HEIGHT],
+            walls,
+        },
+        Name::from("Grid"),
+    ));
 }
 
 pub fn generate(

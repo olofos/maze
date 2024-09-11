@@ -1,5 +1,5 @@
 use bevy::{
-    prelude::Image,
+    prelude::*,
     render::{
         render_asset::RenderAssetUsages,
         render_resource::{Extent3d, TextureDimension},
@@ -8,6 +8,12 @@ use bevy::{
 };
 
 use crate::consts::*;
+
+#[derive(Component)]
+pub struct Tileset {
+    pub tileset: Handle<Image>,
+    pub grid_size: (u32, u32),
+}
 
 #[derive(Clone, Copy)]
 enum SubTile {
@@ -120,4 +126,30 @@ pub fn expand(image: Image) -> Image {
     tileset_image.sampler = ImageSampler::nearest();
 
     tileset_image
+}
+
+pub fn construct_tilemap(
+    mut commands: Commands,
+    query: Query<(Entity, &Tileset), Without<crate::tilemap::Tilemap>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    for (entity, loader) in query.iter() {
+        println!("Load {entity}");
+        let tileset = loader.tileset.clone();
+
+        let Some(image) = images.remove(&tileset) else {
+            continue;
+        };
+
+        commands
+            .entity(entity)
+            .insert((
+                crate::tilemap::Tileset {
+                    image: images.add(expand(image)),
+                    num_tiles: NUM_TILES as u32,
+                },
+                crate::tilemap::Tilemap::new(loader.grid_size.0, loader.grid_size.1),
+            ))
+            .remove::<Tileset>();
+    }
 }

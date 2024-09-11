@@ -6,7 +6,7 @@ use bevy::{
         render_resource::{AsBindGroup, Extent3d, ShaderRef, TextureDimension, TextureFormat},
         texture::ImageSampler,
     },
-    sprite::{Material2d, Mesh2dHandle},
+    sprite::{Material2d, Material2dPlugin, Mesh2dHandle},
 };
 
 use crate::consts::{GRID_HEIGHT, GRID_WIDTH};
@@ -16,6 +16,12 @@ pub struct Tilemap {
     pub width: u32,
     pub height: u32,
     pub data: Vec<u8>,
+}
+
+#[derive(Component)]
+pub struct Tileset {
+    pub image: Handle<Image>,
+    pub num_tiles: u32,
 }
 
 // This is the struct that will be passed to your shader
@@ -30,6 +36,11 @@ pub struct TilemapMaterial {
     tilemap_texture: Handle<Image>,
 }
 
+pub fn plugin(app: &mut App) {
+    app.add_plugins(Material2dPlugin::<TilemapMaterial>::default())
+        .add_systems(Update, (construct_materials, update_tilemaps));
+}
+
 impl Tilemap {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
@@ -40,7 +51,7 @@ impl Tilemap {
     }
 }
 
-pub fn update_tilemaps(
+fn update_tilemaps(
     query: Query<(&Tilemap, &Handle<TilemapMaterial>), Changed<Tilemap>>,
     mut materials: ResMut<Assets<TilemapMaterial>>,
     mut images: ResMut<Assets<Image>>,
@@ -58,9 +69,9 @@ pub fn update_tilemaps(
     }
 }
 
-pub fn construct_materials(
+fn construct_materials(
     mut commands: Commands,
-    query: Query<(Entity, &Tilemap, &Handle<Image>), Without<Handle<TilemapMaterial>>>,
+    query: Query<(Entity, &Tilemap, &Tileset), Without<Handle<TilemapMaterial>>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TilemapMaterial>>,
     mut images: ResMut<Assets<Image>>,
@@ -81,9 +92,14 @@ pub fn construct_materials(
 
         let tilemap_handle = images.add(tilemap_image);
 
+        let Some(tileset_image) = images.get_mut(&tileset.image) else {
+            continue;
+        };
+        tileset_image.reinterpret_stacked_2d_as_array(tileset.num_tiles);
+
         let material = materials.add(TilemapMaterial {
             grid_size: Vec4::new(tilemap.width as f32, tilemap.height as f32, 0.0, 0.0),
-            tileset_texture: tileset.clone(),
+            tileset_texture: tileset.image.clone(),
             tilemap_texture: tilemap_handle,
         });
 
@@ -100,7 +116,7 @@ pub fn construct_materials(
                 InheritedVisibility::default(),
                 ViewVisibility::default(),
             ))
-            .remove::<Handle<Image>>();
+            .remove::<Tileset>();
     }
 }
 

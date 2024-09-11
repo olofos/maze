@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
-use bevy::sprite::Material2dPlugin;
 use bevy::time::common_conditions::on_timer;
 
 use bevy::window::PresentMode;
@@ -15,7 +14,7 @@ mod components;
 mod consts;
 mod maze;
 mod tilemap;
-mod tileset;
+mod tileset_builder;
 
 use crate::components::*;
 use crate::consts::*;
@@ -52,37 +51,37 @@ fn main() {
             }),
             ..default()
         }),
-        Material2dPlugin::<tilemap::TilemapMaterial>::default(),
-    ))
-    .insert_state(GameState::default())
-    .add_systems(Update, tilemap::construct_materials)
-    .add_systems(Update, tilemap::update_tilemaps)
+        tilemap::plugin
+        ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
+    .insert_state(GameState::default())
+
+    .add_systems(OnEnter(GameState::GeneratingMaze), maze::setup)
+    .add_systems(Update, maze::update_tilemap)
     .add_systems(Startup, setup)
     .add_systems(OnEnter(GameState::Playing), setup_player_and_goal)
-    .add_systems(OnEnter(GameState::GeneratingMaze), maze::setup)
-    .add_systems(Update, close_on_esc)
     .add_systems(
-        FixedUpdate,
+        Update,
         move_player.run_if(in_state(GameState::Playing)),
     )
     .add_systems(
         Update,
         maze::generate
-            .run_if(in_state(GameState::GeneratingMaze))
-            .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS))),
+        .run_if(in_state(GameState::GeneratingMaze))
+        .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS))),
     )
-    .add_systems(FixedUpdate, check_goal.run_if(in_state(GameState::Playing)))
-    .add_systems(FixedUpdate, construct_tilemap)
-    .add_systems(FixedUpdate, maze::update_tilemap)
-    .add_systems(Update, expand_image_array)
-    .add_systems(FixedUpdate, generate_bg.run_if(on_timer(Duration::from_millis(500))))
+    .add_systems(Update, check_goal.run_if(in_state(GameState::Playing)))
+    .add_systems(Update, tileset_builder::construct_tilemap)
+    .add_systems(Update, generate_bg.run_if(on_timer(Duration::from_millis(500))))
     // semicolon
     ;
     #[cfg(not(target_arch = "wasm32"))]
-    app.add_plugins(WorldInspectorPlugin::new().run_if(
-        bevy::input::common_conditions::input_toggle_active(false, KeyCode::Backquote),
-    ));
+    {
+        app.add_plugins(WorldInspectorPlugin::new().run_if(
+            bevy::input::common_conditions::input_toggle_active(false, KeyCode::Backquote),
+        ))
+        .add_systems(Update, close_on_esc);
+    }
 
     app.run();
 }
@@ -109,14 +108,6 @@ fn check_goal(
     }
 }
 
-#[derive(Component)]
-struct TilemapLoader {
-    tileset: Handle<Image>,
-    expand: bool,
-    grid_size: (u32, u32),
-    num_tiles: u32,
-}
-
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle {
         transform: Transform {
@@ -128,24 +119,24 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 
     commands.spawn((
-        TilemapLoader {
+        tileset_builder::Tileset {
             tileset: asset_server.load("tileset4.png"),
-            expand: true,
             grid_size: (GRID_WIDTH as u32, GRID_HEIGHT as u32),
-            num_tiles: 17,
         },
         Transform::default().with_translation(Vec3::new(0.0, 0.0, 5.0)),
         Trees,
+        Name::from("Tilemap: Trees"),
     ));
 
     commands.spawn((
-        ImageArray {
+        tilemap::Tileset {
             image: asset_server.load("bg.png"),
             num_tiles: 7,
         },
         Tilemap::new(32, 32),
         Transform::default().with_translation(Vec3::new(0.0, 0.0, -5.0)),
         Ground,
+        Name::from("Tilemap: Background"),
     ));
 }
 
@@ -154,60 +145,6 @@ struct Trees;
 
 #[derive(Component)]
 struct Ground;
-
-#[derive(Component)]
-struct ImageArray {
-    image: Handle<Image>,
-    num_tiles: u32,
-}
-
-fn expand_image_array(
-    mut commands: Commands,
-    query: Query<(Entity, &ImageArray)>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    for (entity, image_array) in query.iter() {
-        let Some(image) = images.get_mut(&image_array.image) else {
-            continue;
-        };
-        image.reinterpret_stacked_2d_as_array(image_array.num_tiles);
-        let handle = image_array.image.clone();
-        commands
-            .entity(entity)
-            .remove::<ImageArray>()
-            .insert(handle);
-    }
-}
-
-fn construct_tilemap(
-    mut commands: Commands,
-    query: Query<(Entity, &TilemapLoader), Without<Tilemap>>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    for (entity, loader) in query.iter() {
-        println!("Load {entity}");
-        let tileset = loader.tileset.clone();
-
-        let Some(image) = images.remove(&tileset) else {
-            continue;
-        };
-
-        let mut tileset_image = if loader.expand {
-            tileset::expand(image)
-        } else {
-            image
-        };
-
-        if tileset_image.texture_descriptor.size.depth_or_array_layers == 1 {
-            tileset_image.reinterpret_stacked_2d_as_array(loader.num_tiles);
-        }
-
-        commands.entity(entity).insert((
-            images.add(tileset_image),
-            Tilemap::new(loader.grid_size.0, loader.grid_size.1),
-        ));
-    }
-}
 
 fn generate_bg(mut commands: Commands, mut query: Query<(Entity, &mut Tilemap), With<Ground>>) {
     let Ok((entity, mut tilemap)) = query.get_single_mut() else {
