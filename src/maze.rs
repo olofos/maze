@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{components::*, consts::*};
+use crate::{components::*, consts::*, tilemap};
 
 #[derive(Component)]
 pub struct MazeCursor {
@@ -151,7 +151,7 @@ pub fn generate(
 
 pub fn update_tilemap(
     grid_query: Query<&Grid, Changed<Grid>>,
-    mut tilemap_query: Query<&mut crate::tilemap::Tilemap, With<crate::Trees>>,
+    mut tilemap_query: Query<&mut tilemap::Tilemap, With<crate::Trees>>,
 ) {
     let Ok(mut tilemap) = tilemap_query.get_single_mut() else {
         return;
@@ -163,32 +163,45 @@ pub fn update_tilemap(
 
     for y in 0..GRID_HEIGHT {
         for x in 0..GRID_WIDTH {
-            let val = if grid.visited[y * GRID_WIDTH + x] == 0
-                && !(x == 0 && y == 0)
-                && !(x == GRID_WIDTH - 1 && y == GRID_HEIGHT - 1)
-            {
-                17
-            } else {
-                let mut val = 0b1111;
-                if grid.walls[y * GRID_WIDTH + x].n || y == GRID_HEIGHT - 1 {
-                    val &= !0b0001;
-                }
-                if grid.walls[y * GRID_WIDTH + x].e || x == GRID_WIDTH - 1 {
-                    val &= !0b0010;
-                }
-                if grid.walls[y * GRID_WIDTH + x].s || y == 0 {
-                    val &= !0b0100;
-                }
-                if grid.walls[y * GRID_WIDTH + x].w || x == 0 {
-                    val &= !0b1000;
-                }
-
-                val
-            };
+            let mut val = 0b1111;
+            if grid.walls[y * GRID_WIDTH + x].n || y == GRID_HEIGHT - 1 {
+                val &= !0b0001;
+            }
+            if grid.walls[y * GRID_WIDTH + x].e || x == GRID_WIDTH - 1 {
+                val &= !0b0010;
+            }
+            if grid.walls[y * GRID_WIDTH + x].s || y == 0 {
+                val &= !0b0100;
+            }
+            if grid.walls[y * GRID_WIDTH + x].w || x == 0 {
+                val &= !0b1000;
+            }
 
             tilemap.data[y * GRID_WIDTH + x] = val;
         }
     }
+}
 
-    // tilemap.data = data;
+pub fn update_cover(
+    grid_query: Query<&Grid>,
+    mut tilemap_query: Query<&mut tilemap::Tilemap, With<crate::Cover>>,
+) {
+    let Ok(mut tilemap) = tilemap_query.get_single_mut() else {
+        return;
+    };
+
+    let Ok(grid) = grid_query.get_single() else {
+        return;
+    };
+
+    for y in 0..GRID_HEIGHT {
+        for x in 0..GRID_WIDTH {
+            if grid.visited[y * GRID_WIDTH + x] == 0 {
+                tilemap.data[y * GRID_WIDTH + x] = 0;
+            } else {
+                tilemap.data[y * GRID_WIDTH + x] =
+                    (tilemap.data[y * GRID_WIDTH + x] + 1).clamp(0, 64);
+            }
+        }
+    }
 }

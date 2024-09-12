@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
+use bevy::render::render_asset::RenderAssetUsages;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::time::common_conditions::on_timer;
 
 use bevy::window::PresentMode;
@@ -53,12 +55,11 @@ fn main() {
     .add_systems(OnEnter(GamePlayState::Playing), setup_player_and_goal)
     .add_systems(Update, (
         tileset_builder::construct_tilemap,
+        generate_bg,
         maze::generate
         .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS))),
-        
-        generate_bg
     ).run_if(in_state(GamePlayState::GeneratingMaze)))
-    .add_systems(Update, maze::update_tilemap.run_if(in_state(AppState::InGame)))
+    .add_systems(Update, (maze::update_tilemap, maze::update_cover).run_if(in_state(AppState::InGame)))
     .add_systems(
         Update,
         (move_player, check_goal).run_if(in_state(GamePlayState::Playing)),
@@ -128,6 +129,48 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         Ground,
         Name::from("Tilemap: Background"),
     ));
+
+    commands.spawn((
+        tilemap::Tileset {
+            image: asset_server.add(create_alpha_tileset()),
+            num_tiles: 4 + 1,
+        },
+        Tilemap::new(GRID_WIDTH as u32, GRID_HEIGHT as u32),
+        Transform::default().with_translation(Vec3::new(0.0, 0.0, 10.0)),
+        Cover,
+        Name::from("Tilemap: Cover"),
+    ));
+}
+
+fn create_alpha_tileset() -> Image {
+    let mut data = vec![];
+    const W: usize = TILE_WIDTH;
+    const H: usize = TILE_HEIGHT;
+    const STEPS: u32 = 4 + 1;
+
+    for n in (0..STEPS).rev() {
+        let alpha = ((n as f64 * 256.0 / (STEPS - 1) as f64) as u32).clamp(0, 0xFF) as u8;
+        println!("alpha: {}", alpha);
+        for _y in 0..H {
+            for _x in 0..W {
+                data.extend([0x31, 0x99, 0x6f]);
+                // data.extend([0xb2,0x2d, 0xb0]);
+                data.push(alpha);
+            }
+        }
+    }
+
+    Image::new(
+        Extent3d {
+            width: W as u32,
+            height: H as u32 * STEPS,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::all(),
+    )
 }
 
 #[derive(Component)]
@@ -135,6 +178,9 @@ struct Trees;
 
 #[derive(Component)]
 struct Ground;
+
+#[derive(Component)]
+struct Cover;
 
 fn generate_bg(mut commands: Commands, mut query: Query<(Entity, &mut Tilemap), With<Ground>>) {
     let Ok((entity, mut tilemap)) = query.get_single_mut() else {
