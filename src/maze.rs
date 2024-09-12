@@ -1,64 +1,15 @@
 use bevy::prelude::*;
 
-use crate::{components::*, consts::*, tilemap};
+use crate::{
+    components::*,
+    consts::*,
+    grid::{Dir, Grid},
+};
 
 #[derive(Component)]
 pub struct MazeCursor {
     path: Vec<IVec2>,
     default: IVec2,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Dir {
-    North = 0b0001,
-    East = 0b0010,
-    South = 0b0100,
-    West = 0b1000,
-}
-
-struct GridRef<'a> {
-    data: &'a mut Vec<u8>,
-    // width: usize,
-    // height: usize,
-}
-
-impl Dir {
-    pub fn reverse(&self) -> Self {
-        match self {
-            Dir::North => Dir::South,
-            Dir::South => Dir::North,
-            Dir::West => Dir::East,
-            Dir::East => Dir::West,
-        }
-    }
-}
-
-impl From<Dir> for IVec2 {
-    fn from(dir: Dir) -> Self {
-        match dir {
-            Dir::North => IVec2::Y,
-            Dir::East => IVec2::X,
-            Dir::South => -IVec2::Y,
-            Dir::West => -IVec2::X,
-        }
-    }
-}
-impl<'a> GridRef<'a> {
-    fn new(tilemap: &'a mut tilemap::Tilemap) -> Self {
-        Self {
-            data: &mut tilemap.data,
-        }
-    }
-
-    fn is_visited(&self, pos: &IVec2) -> bool {
-        self.data[(pos.y as usize) * GRID_WIDTH + pos.x as usize] > 0
-    }
-
-    fn remove_wall(&mut self, pos: IVec2, dir: Dir) {
-        self.data[(pos.y as usize) * GRID_WIDTH + pos.x as usize] |= dir as u8;
-        let pos: IVec2 = pos + IVec2::from(dir);
-        self.data[(pos.y as usize) * GRID_WIDTH + pos.x as usize] |= dir.reverse() as u8;
-    }
 }
 
 pub fn setup(mut commands: Commands) {
@@ -77,13 +28,12 @@ pub fn setup(mut commands: Commands) {
 
 pub fn generate(
     mut cursor_query: Query<&mut MazeCursor>,
-    mut tilemap_query: Query<&mut tilemap::Tilemap, With<Trees>>,
+    mut grid_query: Query<&mut Grid, With<Trees>>,
     mut next_state: ResMut<NextState<crate::GamePlayState>>,
 ) {
-    let Ok(mut tilemap) = tilemap_query.get_single_mut() else {
+    let Ok(mut grid) = grid_query.get_single_mut() else {
         return;
     };
-    let mut grid = GridRef::new(&mut tilemap);
 
     // for _ in 0..100 {
     loop {
@@ -104,7 +54,7 @@ pub fn generate(
                         && p.x < GRID_WIDTH as i32
                         && p.y >= 0
                         && p.y < GRID_HEIGHT as i32
-                        && !grid.is_visited(p)
+                        && !grid.is_visited(*p)
                         && (old_pos == &cursor.default
                             || !(old_pos.x == GRID_WIDTH as i32 - 1
                                 && old_pos.y == GRID_HEIGHT as i32 - 1))
@@ -121,7 +71,7 @@ pub fn generate(
                     possibilities[index]
                 }
             } else {
-                if grid.is_visited(&cursor.default) {
+                if grid.is_visited(cursor.default) {
                     num_completed += 1;
                     continue;
                 }
@@ -146,20 +96,20 @@ pub fn generate(
 }
 
 pub fn update_cover(
-    tilemap_query: Query<&tilemap::Tilemap, (With<Trees>, Without<Cover>)>,
-    mut cover_query: Query<&mut tilemap::Tilemap, With<Cover>>,
+    grid_query: Query<&Grid>,
+    mut cover_query: Query<&mut crate::tilemap::Tilemap, With<Cover>>,
 ) {
     let Ok(mut cover) = cover_query.get_single_mut() else {
         return;
     };
 
-    let Ok(tilemap) = tilemap_query.get_single() else {
+    let Ok(grid) = grid_query.get_single() else {
         return;
     };
 
     for y in 0..GRID_HEIGHT {
         for x in 0..GRID_WIDTH {
-            if tilemap.data[y * GRID_WIDTH + x] == 0 {
+            if !grid.is_visited(IVec2::new(x as i32, y as i32)) {
                 cover.data[y * GRID_WIDTH + x] = 0;
             } else {
                 cover.data[y * GRID_WIDTH + x] = (cover.data[y * GRID_WIDTH + x] + 1).clamp(0, 64);

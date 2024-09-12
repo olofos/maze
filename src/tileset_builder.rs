@@ -12,7 +12,6 @@ use crate::consts::*;
 #[derive(Component)]
 pub struct Tileset {
     pub tileset: Handle<Image>,
-    pub grid_size: (u32, u32),
 }
 
 #[derive(Clone, Copy)]
@@ -142,13 +141,10 @@ pub fn construct_tilemap(
 
         commands
             .entity(entity)
-            .insert((
-                crate::tilemap::Tileset {
-                    image: images.add(expand(image)),
-                    num_tiles: NUM_TILES as u32,
-                },
-                crate::tilemap::Tilemap::new(loader.grid_size.0, loader.grid_size.1),
-            ))
+            .insert((crate::tilemap::Tileset {
+                image: images.add(expand(image)),
+                num_tiles: NUM_TILES as u32,
+            },))
             .remove::<Tileset>();
     }
 }

@@ -9,12 +9,14 @@ use bevy::time::common_conditions::on_timer;
 use bevy::window::PresentMode;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use grid::{Dir, Grid};
 use rand::Rng;
 use states::{AppState, GamePlayState};
 use tilemap::Tilemap;
 
 mod components;
 mod consts;
+mod grid;
 mod maze;
 mod states;
 mod tilemap;
@@ -46,6 +48,7 @@ fn main() {
             ..default()
         }),
         tilemap::plugin,
+        tilemap::plugin_with_data::<Grid>,
         states::plugin,
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
@@ -111,7 +114,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         tileset_builder::Tileset {
             tileset: asset_server.load("tileset4.png"),
-            grid_size: (GRID_WIDTH as u32, GRID_HEIGHT as u32),
+        },
+        Grid {
+            data: vec![0; GRID_WIDTH * GRID_HEIGHT],
         },
         Transform::default().with_translation(Vec3::new(0.0, 0.0, 5.0)),
         Trees,
@@ -229,11 +234,11 @@ fn setup_player_and_goal(mut commands: Commands, asset_server: Res<AssetServer>)
 fn move_player(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut player_query: Query<&mut Transform, With<Player>>,
-    tilemap_query: Query<&Tilemap, With<Trees>>,
+    tilemap_query: Query<&Grid, With<Trees>>,
     time: Res<Time>,
 ) {
     let mut player_transform = player_query.single_mut();
-    let grid = &tilemap_query.single().data;
+    let grid = tilemap_query.single();
 
     let mut direction = Vec3::new(0., 0., 0.);
 
@@ -257,7 +262,7 @@ fn move_player(
     }
 
     let pos = player_transform.translation.xy().floor();
-    let walls = grid[(pos.y * GRID_WIDTH as f32 + pos.x) as usize];
+    let ipos = pos.as_ivec2();
 
     let is_between = (player_transform.translation.xy() - (pos + Vec2::new(0.5, 0.5)))
         .abs()
@@ -266,22 +271,22 @@ fn move_player(
             (1.0 - PLAYER_HEIGHT) / 2.0,
         ));
 
-    let min_x = if is_between.y || walls & 0b1000 == 0 {
+    let min_x = if is_between.y || grid.has_wall(ipos, Dir::West) {
         pos.x
     } else {
         0.0
     };
-    let max_x = if is_between.y || walls & 0b0010 == 0 {
+    let max_x = if is_between.y || grid.has_wall(ipos, Dir::East) {
         pos.x + 1.0
     } else {
         GRID_WIDTH as f32
     };
-    let min_y = if is_between.x || walls & 0b0100 == 0 {
+    let min_y = if is_between.x || grid.has_wall(ipos, Dir::South) {
         pos.y
     } else {
         0.0
     };
-    let max_y = if is_between.x || walls & 0b0001 == 0 {
+    let max_y = if is_between.x || grid.has_wall(ipos, Dir::North) {
         pos.y + 1.0
     } else {
         GRID_HEIGHT as f32

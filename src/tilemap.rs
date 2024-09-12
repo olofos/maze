@@ -23,6 +23,21 @@ pub struct Tileset {
     pub num_tiles: u32,
 }
 
+pub trait TilemapData {
+    fn data(&self) -> &Vec<u8>;
+    fn grid_size(&self) -> UVec2;
+}
+
+impl TilemapData for Tilemap {
+    fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+
+    fn grid_size(&self) -> UVec2 {
+        self.grid_size
+    }
+}
+
 // This is the struct that will be passed to your shader
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct TilemapMaterial {
@@ -37,12 +52,16 @@ pub struct TilemapMaterial {
 
 pub fn plugin(app: &mut App) {
     app.add_plugins(Material2dPlugin::<TilemapMaterial>::default())
-        .register_type::<Tilemap>()
-        .add_systems(
-            Update,
-            (construct_materials, update_tilemaps)
-                .run_if(in_state(crate::states::AppState::InGame)),
-        );
+        .register_type::<Tilemap>();
+    plugin_with_data::<Tilemap>(app);
+}
+
+pub fn plugin_with_data<T: TilemapData + Component>(app: &mut App) {
+    app.add_systems(
+        Update,
+        (construct_materials::<T>, update_tilemaps::<T>)
+            .run_if(in_state(crate::states::AppState::InGame)),
+    );
 }
 
 impl Tilemap {
@@ -54,8 +73,8 @@ impl Tilemap {
     }
 }
 
-fn update_tilemaps(
-    query: Query<(&Tilemap, &Handle<TilemapMaterial>), Changed<Tilemap>>,
+fn update_tilemaps<T: TilemapData + Component>(
+    query: Query<(&T, &Handle<TilemapMaterial>), Changed<T>>,
     mut materials: ResMut<Assets<TilemapMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
@@ -68,13 +87,13 @@ fn update_tilemaps(
         let Some(image) = images.get_mut(&tilemap_handle) else {
             continue;
         };
-        image.data.clone_from(&tilemap.data);
+        image.data.clone_from(tilemap.data());
     }
 }
 
-fn construct_materials(
+fn construct_materials<T: TilemapData + Component>(
     mut commands: Commands,
-    query: Query<(Entity, &Tilemap, &Tileset), Without<Handle<TilemapMaterial>>>,
+    query: Query<(Entity, &T, &Tileset), Without<Handle<TilemapMaterial>>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TilemapMaterial>>,
     mut images: ResMut<Assets<Image>>,
@@ -82,12 +101,12 @@ fn construct_materials(
     for (entity, tilemap, tileset) in query.iter() {
         let mut tilemap_image = Image::new(
             Extent3d {
-                width: tilemap.grid_size.x,
-                height: tilemap.grid_size.y,
+                width: tilemap.grid_size().x,
+                height: tilemap.grid_size().y,
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
-            tilemap.data.clone(),
+            tilemap.data().clone(),
             TextureFormat::R8Uint,
             RenderAssetUsages::all(),
         );
@@ -101,7 +120,7 @@ fn construct_materials(
         tileset_image.reinterpret_stacked_2d_as_array(tileset.num_tiles);
 
         let material = materials.add(TilemapMaterial {
-            grid_size: tilemap.grid_size.as_vec2().xyxy(),
+            grid_size: tilemap.grid_size().as_vec2().xyxy(),
             tileset_texture: tileset.image.clone(),
             tilemap_texture: tilemap_handle,
         });
