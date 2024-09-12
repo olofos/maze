@@ -49,7 +49,6 @@ fn main() {
         states::plugin,
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
-    .register_type::<components::Grid>()
     .add_systems(Startup, setup)
     .add_systems(OnEnter(GamePlayState::GeneratingMaze), maze::setup)
     .add_systems(OnEnter(GamePlayState::Playing), setup_player_and_goal)
@@ -59,7 +58,7 @@ fn main() {
         maze::generate
         .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS))),
     ).run_if(in_state(GamePlayState::GeneratingMaze)))
-    .add_systems(Update, (maze::update_tilemap, maze::update_cover).run_if(in_state(AppState::InGame)))
+    .add_systems(Update, ( maze::update_cover).run_if(in_state(AppState::InGame)))
     .add_systems(
         Update,
         (move_player, check_goal).run_if(in_state(GamePlayState::Playing)),
@@ -173,15 +172,6 @@ fn create_alpha_tileset() -> Image {
     )
 }
 
-#[derive(Component)]
-struct Trees;
-
-#[derive(Component)]
-struct Ground;
-
-#[derive(Component)]
-struct Cover;
-
 fn generate_bg(mut commands: Commands, mut query: Query<(Entity, &mut Tilemap), With<Ground>>) {
     let Ok((entity, mut tilemap)) = query.get_single_mut() else {
         return;
@@ -239,11 +229,11 @@ fn setup_player_and_goal(mut commands: Commands, asset_server: Res<AssetServer>)
 fn move_player(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut player_query: Query<&mut Transform, With<Player>>,
-    grid_query: Query<&Grid>,
+    tilemap_query: Query<&Tilemap, With<Trees>>,
     time: Res<Time>,
 ) {
     let mut player_transform = player_query.single_mut();
-    let grid = grid_query.single();
+    let grid = &tilemap_query.single().data;
 
     let mut direction = Vec3::new(0., 0., 0.);
 
@@ -267,7 +257,7 @@ fn move_player(
     }
 
     let pos = player_transform.translation.xy().floor();
-    let walls = &grid.walls[(pos.y * GRID_WIDTH as f32 + pos.x) as usize];
+    let walls = grid[(pos.y * GRID_WIDTH as f32 + pos.x) as usize];
 
     let is_between = (player_transform.translation.xy() - (pos + Vec2::new(0.5, 0.5)))
         .abs()
@@ -276,14 +266,22 @@ fn move_player(
             (1.0 - PLAYER_HEIGHT) / 2.0,
         ));
 
-    let min_x = if is_between.y || walls.w { pos.x } else { 0.0 };
-    let max_x = if is_between.y || walls.e {
+    let min_x = if is_between.y || walls & 0b1000 == 0 {
+        pos.x
+    } else {
+        0.0
+    };
+    let max_x = if is_between.y || walls & 0b0010 == 0 {
         pos.x + 1.0
     } else {
         GRID_WIDTH as f32
     };
-    let min_y = if is_between.x || walls.s { pos.y } else { 0.0 };
-    let max_y = if is_between.x || walls.n {
+    let min_y = if is_between.x || walls & 0b0100 == 0 {
+        pos.y
+    } else {
+        0.0
+    };
+    let max_y = if is_between.x || walls & 0b0001 == 0 {
         pos.y + 1.0
     } else {
         GRID_HEIGHT as f32
