@@ -230,8 +230,8 @@ fn move_player(
             (1.0 - PLAYER_HEIGHT) / 2.0,
         ));
 
-    let min_x = if is_between.y || walls.e { pos.x } else { 0.0 };
-    let max_x = if is_between.y || walls.w {
+    let min_x = if is_between.y || walls.w { pos.x } else { 0.0 };
+    let max_x = if is_between.y || walls.e {
         pos.x + 1.0
     } else {
         GRID_WIDTH as f32
