@@ -1,5 +1,5 @@
-pub const GRID_WIDTH: usize = 16;
-pub const GRID_HEIGHT: usize = 16;
+pub const GRID_WIDTH: usize = 8;
+pub const GRID_HEIGHT: usize = 8;
 pub const MARGIN: f32 = 16.0;
 pub const PLAYFIELD_WIDTH: f32 = 1024.0;
 pub const PLAYFIELD_HEIGHT: f32 = 1024.0;
@@ -15,4 +15,4 @@ pub const PLAYER_HEIGHT: f32 = 0.75;
 pub const PLAYER_SPEED: f32 = GRID_WIDTH as f32 / 4.0;
 
 pub const NUM_CURSORS: i32 = 1;
-pub const MAZE_GEN_TIME_MS: u64 = 1;
+pub const MAZE_GEN_TIME_MS: u64 = 250;

@@ -61,7 +61,7 @@ fn main() {
         maze::generate
         .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS))),
     ).run_if(in_state(GamePlayState::GeneratingMaze)))
-    .add_systems(Update, ( maze::update_cover).run_if(in_state(AppState::InGame)))
+    .add_systems(Update, ( maze::update_cover, maze::update_overlay).run_if(in_state(AppState::InGame)))
     .add_systems(
         Update,
         (move_player, check_goal).run_if(in_state(GamePlayState::Playing)),
@@ -115,9 +115,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         tileset_builder::Tileset {
             tileset: asset_server.load("tileset4.png"),
         },
-        Grid {
-            data: vec![0; GRID_WIDTH * GRID_HEIGHT],
-        },
+        Grid::new(),
         Transform::default().with_translation(Vec3::new(0.0, 0.0, 5.0)),
         Trees,
         Name::from("Tilemap: Trees"),
@@ -132,6 +130,17 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         Transform::default().with_translation(Vec3::new(0.0, 0.0, -5.0)),
         Ground,
         Name::from("Tilemap: Background"),
+    ));
+
+    commands.spawn((
+        tilemap::Tileset {
+            image: asset_server.load("hex.png"),
+            num_tiles: 17,
+        },
+        Tilemap::new(64, 64),
+        Transform::default().with_translation(Vec3::new(0.0, 0.0, 15.0)),
+        DebugOverlay,
+        Name::from("Tilemap: Debug Overlay"),
     ));
 
     commands.spawn((

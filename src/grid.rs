@@ -3,17 +3,8 @@ use bevy::prelude::*;
 
 #[derive(Component)]
 pub struct Grid {
-    pub data: Vec<u8>,
-}
-
-impl tilemap::TilemapData for Grid {
-    fn data(&self) -> &Vec<u8> {
-        &self.data
-    }
-
-    fn grid_size(&self) -> UVec2 {
-        UVec2::new(GRID_WIDTH as u32, GRID_HEIGHT as u32)
-    }
+    data: Vec<u8>,
+    pub region: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,26 +37,67 @@ impl From<Dir> for IVec2 {
     }
 }
 
-impl Grid {
-    pub fn get(&self, pos: IVec2) -> u8 {
-        self.data[(pos.y as usize) * GRID_WIDTH + pos.x as usize]
+impl tilemap::TilemapData for Grid {
+    fn data(&self) -> &Vec<u8> {
+        &self.data
     }
 
-    pub fn get_mut(&mut self, pos: IVec2) -> &mut u8 {
-        &mut self.data[(pos.y as usize) * GRID_WIDTH + pos.x as usize]
+    fn grid_size(&self) -> UVec2 {
+        UVec2::new(GRID_WIDTH as u32, GRID_HEIGHT as u32)
+    }
+}
+
+impl Grid {
+    pub fn new() -> Self {
+        Self {
+            data: vec![0; GRID_WIDTH * GRID_HEIGHT],
+            region: (0..(GRID_WIDTH * GRID_HEIGHT)).map(|n| n as u8).collect(),
+        }
+    }
+
+    fn index(&self, pos: IVec2) -> usize {
+        (pos.y as usize) * GRID_WIDTH + pos.x as usize
+    }
+
+    pub fn get_walls(&self, pos: IVec2) -> u8 {
+        self.data[self.index(pos)]
+    }
+
+    pub fn get_walls_mut(&mut self, pos: IVec2) -> &mut u8 {
+        let index = self.index(pos);
+        &mut self.data[index]
     }
 
     pub fn is_visited(&self, pos: IVec2) -> bool {
-        self.get(pos) > 0
+        self.get_walls(pos) > 0
     }
 
     pub fn remove_wall(&mut self, pos: IVec2, dir: Dir) {
-        *self.get_mut(pos) |= dir as u8;
+        *self.get_walls_mut(pos) |= dir as u8;
+        let region = self.region[self.index(pos)];
         let pos: IVec2 = pos + IVec2::from(dir);
-        *self.get_mut(pos) |= dir.reverse() as u8;
+        *self.get_walls_mut(pos) |= dir.reverse() as u8;
+        self.fill_region(pos, region);
+    }
+
+    fn fill_region(&mut self, pos: IVec2, region: u8) {
+        let index = self.index(pos);
+        if self.region[index] == region {
+            return;
+        }
+        self.region[index] = region;
+        for dir in [Dir::North, Dir::East, Dir::South, Dir::West] {
+            if !self.has_wall(pos, dir) {
+                self.fill_region(pos + IVec2::from(dir), region);
+            }
+        }
     }
 
     pub fn has_wall(&self, pos: IVec2, dir: Dir) -> bool {
-        self.get(pos) & (dir as u8) == 0
+        (self.get_walls(pos) & (dir as u8) == 0)
+            || (pos.x == 0 && dir == Dir::West)
+            || (pos.y == 0 && dir == Dir::South)
+            || (pos.x == GRID_WIDTH as i32 - 1 && dir == Dir::East)
+            || (pos.y == GRID_HEIGHT as i32 - 1 && dir == Dir::North)
     }
 }

@@ -118,6 +118,7 @@ fn construct_materials<T: TilemapData + Component>(
             continue;
         };
         tileset_image.reinterpret_stacked_2d_as_array(tileset.num_tiles);
+        tileset_image.sampler = ImageSampler::nearest();
 
         let material = materials.add(TilemapMaterial {
             grid_size: tilemap.grid_size().as_vec2().xyxy(),
