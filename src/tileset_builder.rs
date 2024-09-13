@@ -56,7 +56,7 @@ fn blit_tile(
         for x in 0..SUBTILE_WIDTH {
             for i in 0..CHANNELS {
                 dst[CHANNELS * TILE_WIDTH * y + CHANNELS * x + i] =
-                    src[(CHANNELS * SUBTILE_WIDTH * (SUBTILE_HEIGHT - y - 1)) + CHANNELS * x + i];
+                    src[(CHANNELS * SUBTILE_WIDTH * y) + CHANNELS * x + i];
             }
         }
     }
@@ -65,16 +65,16 @@ fn blit_tile(
 pub fn expand(image: Image) -> Image {
     use SubTile::*;
 
-    let max_x = TILE_WIDTH / SUBTILE_WIDTH - 1;
-    let max_y = TILE_HEIGHT / SUBTILE_HEIGHT - 1;
+    const MAX_X: usize = TILE_WIDTH / SUBTILE_WIDTH - 1;
+    const MAX_Y: usize = TILE_HEIGHT / SUBTILE_HEIGHT - 1;
 
     let mut tiles = vec![0u8; TILE_WIDTH * TILE_HEIGHT * NUM_TILES * CHANNELS];
 
     let src = &image.data;
     let dst = &mut tiles;
 
-    for x in 0..=max_x {
-        for y in 0..=max_y {
+    for x in 0..=MAX_X {
+        for y in 0..=MAX_Y {
             blit_tile(src, dst, Full, NUM_TILES - 1, (x, y));
         }
     }
@@ -89,23 +89,23 @@ pub fn expand(image: Image) -> Image {
         let s = [S, Empty][(dst_tile_num & 0b100) >> 2];
         let w = [W, Empty][(dst_tile_num & 0b1000) >> 3];
 
-        blit_tile(src, dst, sw, dst_tile_num, (0, 0));
-        blit_tile(src, dst, se, dst_tile_num, (max_x, 0));
-        blit_tile(src, dst, nw, dst_tile_num, (0, max_y));
-        blit_tile(src, dst, ne, dst_tile_num, (max_x, max_y));
+        blit_tile(src, dst, sw, dst_tile_num, (0, MAX_Y));
+        blit_tile(src, dst, se, dst_tile_num, (MAX_X, MAX_Y));
+        blit_tile(src, dst, nw, dst_tile_num, (0, 0));
+        blit_tile(src, dst, ne, dst_tile_num, (MAX_X, 0));
 
-        for x in 1..max_x {
-            blit_tile(src, dst, s, dst_tile_num, (x, 0));
-            blit_tile(src, dst, n, dst_tile_num, (x, max_y));
+        for x in 1..MAX_X {
+            blit_tile(src, dst, s, dst_tile_num, (x, MAX_Y));
+            blit_tile(src, dst, n, dst_tile_num, (x, 0));
         }
 
-        for y in 1..max_y {
+        for y in 1..MAX_Y {
             blit_tile(src, dst, w, dst_tile_num, (0, y));
-            blit_tile(src, dst, e, dst_tile_num, (max_x, y));
+            blit_tile(src, dst, e, dst_tile_num, (MAX_X, y));
         }
 
-        for x in 1..max_x {
-            for y in 1..max_y {
+        for x in 1..MAX_X {
+            for y in 1..MAX_Y {
                 blit_tile(src, dst, Empty, dst_tile_num, (x, y));
             }
         }

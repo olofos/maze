@@ -10,7 +10,8 @@
 fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     let size = grid_size.xy;
     let tilemap_uv = mesh.uv * size;
-    let tile_uv = fract(mesh.uv * size);
+    let tile_uv_fract = fract(mesh.uv * size);
+    let tile_uv = vec2<f32>(tile_uv_fract.x, 1.0 - tile_uv_fract.y);
     let tile_index = textureLoad(tilemap_texture, vec2<u32>(tilemap_uv), 0).x;
     return textureSample(tileset_texture, tileset_sampler, tile_uv, tile_index);
 }
