@@ -4,6 +4,7 @@ use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::sprite::Material2dPlugin;
 use bevy::time::common_conditions::on_timer;
 
 use bevy::window::PresentMode;
@@ -18,6 +19,7 @@ mod components;
 mod consts;
 mod grid;
 mod maze;
+mod overlay;
 mod states;
 mod tilemap;
 mod tileset_builder;
@@ -50,6 +52,7 @@ fn main() {
         tilemap::plugin,
         tilemap::plugin_with_data::<Grid>,
         states::plugin,
+        Material2dPlugin::<overlay::OverlayMaterial>::default()
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
@@ -61,7 +64,9 @@ fn main() {
         maze::generate
         .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS))),
     ).run_if(in_state(GamePlayState::GeneratingMaze)))
-    .add_systems(Update, ( maze::update_cover, maze::update_overlay).run_if(in_state(AppState::InGame)))
+    .add_systems(Update, ( maze::update_cover, maze::update_overlay, overlay::construct_materials, 
+       overlay::update_overlays
+    ).run_if(in_state(AppState::InGame)))
     .add_systems(
         Update,
         (move_player, check_goal).run_if(in_state(GamePlayState::Playing)),
@@ -134,17 +139,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     commands.spawn((
         tilemap::Tileset {
-            image: asset_server.load("hex.png"),
-            num_tiles: 17,
-        },
-        Tilemap::new(64, 64),
-        Transform::default().with_translation(Vec3::new(0.0, 0.0, 15.0)),
-        DebugOverlay,
-        Name::from("Tilemap: Debug Overlay"),
-    ));
-
-    commands.spawn((
-        tilemap::Tileset {
             image: asset_server.add(create_alpha_tileset()),
             num_tiles: 4 + 1,
         },
@@ -152,6 +146,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         Transform::default().with_translation(Vec3::new(0.0, 0.0, 10.0)),
         Cover,
         Name::from("Tilemap: Cover"),
+    ));
+
+    commands.spawn((
+        overlay::Overlay::new(asset_server.load("hex.png")),
+        Transform::default().with_translation(Vec3::new(0.0, 0.0, 15.0)),
+        Name::from("Overlay"),
     ));
 }
 

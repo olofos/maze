@@ -4,7 +4,6 @@ use crate::{
     components::*,
     consts::*,
     grid::{Dir, Grid},
-    tilemap::Tilemap,
 };
 
 #[derive(Component)]
@@ -121,7 +120,7 @@ pub fn update_cover(
 
 pub fn update_overlay(
     grid_query: Query<&Grid>,
-    mut overlay_query: Query<&mut Tilemap, With<DebugOverlay>>,
+    mut overlay_query: Query<&mut crate::overlay::Overlay>,
 ) {
     let Ok(mut overlay) = overlay_query.get_single_mut() else {
         return;
@@ -131,25 +130,5 @@ pub fn update_overlay(
         return;
     };
 
-    overlay.data = vec![17u8; 64 * 64];
-
-    const CELL_WIDTH: usize = 64 / GRID_WIDTH;
-    const CELL_HEIGHT: usize = 64 / GRID_HEIGHT;
-
-    if grid.region.is_empty() {
-        return;
-    }
-
-    for y in 0..GRID_HEIGHT {
-        for x in 0..GRID_WIDTH {
-            overlay.data[(y * CELL_HEIGHT + 1) * GRID_WIDTH * CELL_WIDTH
-                + x * CELL_WIDTH
-                + CELL_WIDTH
-                - 3] = (grid.region[y * GRID_WIDTH + x] as u8 >> 4) & 0xF;
-            overlay.data[(y * CELL_HEIGHT + 1) * GRID_WIDTH * CELL_WIDTH
-                + x * CELL_WIDTH
-                + CELL_WIDTH
-                - 2] = grid.region[y * GRID_WIDTH + x] as u8 & 0xF;
-        }
-    }
+    overlay.data.clone_from(&grid.region);
 }

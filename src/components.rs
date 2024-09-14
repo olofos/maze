@@ -14,6 +14,3 @@ pub struct Ground;
 
 #[derive(Component)]
 pub struct Cover;
-
-#[derive(Component)]
-pub struct DebugOverlay;

@@ -83,8 +83,7 @@ fn update_tilemaps<T: TilemapData + Component>(
         let Some(material) = materials.get_mut(material) else {
             continue;
         };
-        let tilemap_handle = material.tilemap_texture.clone();
-        let Some(image) = images.get_mut(&tilemap_handle) else {
+        let Some(image) = images.get_mut(&material.tilemap_texture) else {
             continue;
         };
         image.data.clone_from(tilemap.data());
@@ -154,7 +153,7 @@ impl Material2d for TilemapMaterial {
     }
 }
 
-fn create_mesh(size: UVec2) -> Mesh {
+pub fn create_mesh(size: UVec2) -> Mesh {
     let x: f32 = size.x as f32;
     let y = size.y as f32;
     Mesh::new(
