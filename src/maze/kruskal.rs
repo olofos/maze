@@ -36,13 +36,6 @@ pub fn setup(mut commands: Commands) {
             if x < GRID_WIDTH as i32 - 1 {
                 queue.push((IVec2::new(x, y), Dir::East));
             }
-            if y > 0 {
-                queue.push((IVec2::new(x, y), Dir::South));
-            }
-
-            if x > 0 {
-                queue.push((IVec2::new(x, y), Dir::West));
-            }
         }
     }
 
@@ -65,15 +58,17 @@ pub fn generate(
         return;
     };
 
-    loop {
-        let Some((pos, dir)) = state.queue.pop() else {
-            println!("Maze done");
-            next_state.set(crate::GamePlayState::Playing);
-            return;
-        };
+    for _ in 0..1 {
+        loop {
+            let Some((pos, dir)) = state.queue.pop() else {
+                println!("Maze done");
+                next_state.set(crate::GamePlayState::Playing);
+                return;
+            };
 
-        if let Ok(_) = grid.remove_wall(pos, dir) {
-            return;
+            if let Ok(_) = grid.remove_wall(pos, dir) {
+                break;
+            }
         }
     }
 }
