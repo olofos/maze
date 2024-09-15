@@ -1,11 +1,9 @@
-use std::time::Duration;
 
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::sprite::Material2dPlugin;
-use bevy::time::common_conditions::on_timer;
 
 use bevy::window::PresentMode;
 #[cfg(not(target_arch = "wasm32"))]
@@ -52,19 +50,17 @@ fn main() {
         tilemap::plugin,
         tilemap::plugin_with_data::<Grid>,
         states::plugin,
+        maze::plugin,
         Material2dPlugin::<overlay::OverlayMaterial>::default()
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
-    .add_systems(OnEnter(GamePlayState::GeneratingMaze), maze::setup)
     .add_systems(OnEnter(GamePlayState::Playing), setup_player_and_goal)
     .add_systems(Update, (
         tileset_builder::construct_tilemap,
         generate_bg,
-        maze::generate
-        .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS))),
     ).run_if(in_state(GamePlayState::GeneratingMaze)))
-    .add_systems(Update, ( maze::update_cover, maze::update_overlay, overlay::construct_materials, 
+    .add_systems(Update, ( overlay::construct_materials, 
        overlay::update_overlays
     ).run_if(in_state(AppState::InGame)))
     .add_systems(

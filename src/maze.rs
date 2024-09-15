@@ -1,15 +1,32 @@
-use bevy::prelude::*;
+use std::time::Duration;
+
+use bevy::{prelude::*, time::common_conditions::on_timer};
 
 use crate::{
     components::*,
     consts::*,
     grid::{Dir, Grid},
+    states::{AppState, GamePlayState},
 };
 
 #[derive(Component)]
 pub struct MazeCursor {
     path: Vec<IVec2>,
     default: IVec2,
+}
+
+pub fn plugin(app: &mut App) {
+    app.add_systems(OnEnter(GamePlayState::GeneratingMaze), setup)
+        .add_systems(
+            Update,
+            generate
+                .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS)))
+                .run_if(in_state(GamePlayState::GeneratingMaze)),
+        )
+        .add_systems(
+            Update,
+            (update_cover, update_overlay).run_if(in_state(AppState::InGame)),
+        );
 }
 
 pub fn setup(mut commands: Commands) {
