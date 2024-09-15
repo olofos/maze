@@ -9,6 +9,7 @@ use bevy::window::PresentMode;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use grid::{Dir, Grid};
+use maze::MazeType;
 use rand::Rng;
 use states::{AppState, GamePlayState};
 use tilemap::Tilemap;
@@ -50,7 +51,7 @@ fn main() {
         tilemap::plugin,
         tilemap::plugin_with_data::<Grid>,
         states::plugin,
-        maze::plugin,
+        maze::Plugin { maze_type: MazeType::Kruskal },
         Material2dPlugin::<overlay::OverlayMaterial>::default()
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
