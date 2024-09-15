@@ -71,7 +71,7 @@ pub fn generate(
                         && p.x < GRID_WIDTH as i32
                         && p.y >= 0
                         && p.y < GRID_HEIGHT as i32
-                        && !grid.is_visited(*p)
+                        && grid.region(*p) != grid.region(*old_pos)
                         && (old_pos == &cursor.default
                             || !(old_pos.x == GRID_WIDTH as i32 - 1
                                 && old_pos.y == GRID_HEIGHT as i32 - 1))
@@ -79,7 +79,6 @@ pub fn generate(
 
                 if possibilities.is_empty() {
                     cursor.path.pop();
-                    // commands.entity(cursor.sprites.pop().unwrap()).despawn();
                     continue;
                 } else {
                     use rand::Rng;
@@ -99,7 +98,7 @@ pub fn generate(
 
             if let Some(old_pos) = old_pos {
                 if let Some(dir) = dir {
-                    grid.remove_wall(old_pos, dir);
+                    grid.remove_wall(old_pos, dir).unwrap();
                 }
             }
         }

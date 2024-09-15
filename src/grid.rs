@@ -59,6 +59,10 @@ impl Grid {
         (pos.y as usize) * GRID_WIDTH + pos.x as usize
     }
 
+    pub fn region(&self, pos: IVec2) -> u8 {
+        self.region[self.index(pos)]
+    }
+
     pub fn get_walls(&self, pos: IVec2) -> u8 {
         self.data[self.index(pos)]
     }
@@ -72,12 +76,17 @@ impl Grid {
         self.get_walls(pos) > 0
     }
 
-    pub fn remove_wall(&mut self, pos: IVec2, dir: Dir) {
+    pub fn remove_wall(&mut self, pos: IVec2, dir: Dir) -> Result<(), ()> {
+        let new_pos: IVec2 = pos + IVec2::from(dir);
+        if self.region[self.index(pos)] == self.region[self.index(new_pos)] {
+            return Err(());
+        }
         *self.get_walls_mut(pos) |= dir as u8;
         let region = self.region[self.index(pos)];
-        let pos: IVec2 = pos + IVec2::from(dir);
-        *self.get_walls_mut(pos) |= dir.reverse() as u8;
-        self.fill_region(pos, region);
+        *self.get_walls_mut(new_pos) |= dir.reverse() as u8;
+        self.fill_region(new_pos, region);
+
+        Ok(())
     }
 
     fn fill_region(&mut self, pos: IVec2, region: u8) {
