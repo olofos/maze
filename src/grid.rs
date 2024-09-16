@@ -45,6 +45,10 @@ impl tilemap::TilemapData for Grid {
     fn grid_size(&self) -> UVec2 {
         UVec2::new(GRID_WIDTH as u32, GRID_HEIGHT as u32)
     }
+
+    fn subgrid_size(&self) -> UVec2 {
+        UVec2::ZERO
+    }
 }
 
 impl Grid {

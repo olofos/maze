@@ -1,9 +1,7 @@
-
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy::sprite::Material2dPlugin;
 
 use bevy::window::PresentMode;
 #[cfg(not(target_arch = "wasm32"))]
@@ -11,7 +9,7 @@ use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use grid::{Dir, Grid};
 use maze::MazeType;
 use rand::Rng;
-use states::{AppState, GamePlayState};
+use states::GamePlayState;
 use tilemap::Tilemap;
 
 mod components;
@@ -49,10 +47,10 @@ fn main() {
             ..default()
         }),
         tilemap::plugin,
-        tilemap::plugin_with_data::<Grid>,
+        tilemap::plugin_with_data::<tilemap::TilemapShader, Grid>,
+        overlay::plugin,
         states::plugin,
         maze::Plugin { maze_type: MazeType::Kruskal },
-        Material2dPlugin::<overlay::OverlayMaterial>::default()
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
@@ -61,9 +59,6 @@ fn main() {
         tileset_builder::construct_tilemap,
         generate_bg,
     ).run_if(in_state(GamePlayState::GeneratingMaze)))
-    .add_systems(Update, ( overlay::construct_materials, 
-       overlay::update_overlays
-    ).run_if(in_state(AppState::InGame)))
     .add_systems(
         Update,
         (move_player, check_goal).run_if(in_state(GamePlayState::Playing)),
@@ -146,7 +141,11 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 
     commands.spawn((
-        overlay::Overlay::new(asset_server.load("hex.png")),
+        overlay::Overlay::new(),
+        tilemap::Tileset {
+            image: asset_server.load("hex.png"),
+            num_tiles: 17,
+        },
         Transform::default().with_translation(Vec3::new(0.0, 0.0, 15.0)),
         Name::from("Overlay"),
     ));

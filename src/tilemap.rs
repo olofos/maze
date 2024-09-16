@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use bevy::{
     prelude::*,
     render::{
@@ -26,6 +28,9 @@ pub struct Tileset {
 pub trait TilemapData {
     fn data(&self) -> &Vec<u8>;
     fn grid_size(&self) -> UVec2;
+    fn subgrid_size(&self) -> UVec2 {
+        UVec2::ZERO
+    }
 }
 
 impl TilemapData for Tilemap {
@@ -38,9 +43,20 @@ impl TilemapData for Tilemap {
     }
 }
 
+pub trait TilemapMaterialShader: TypePath + Clone + Send + Sync {
+    const SHADER: &'static str;
+}
+
+#[derive(TypePath, Clone)]
+pub struct TilemapShader;
+
+impl TilemapMaterialShader for TilemapShader {
+    const SHADER: &'static str = "shaders/tilemap.wgsl";
+}
+
 // This is the struct that will be passed to your shader
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
-pub struct TilemapMaterial {
+struct TilemapMaterial<T: TilemapMaterialShader> {
     #[uniform(0)]
     grid_size: Vec4,
     #[texture(1, dimension = "2d_array")]
@@ -48,18 +64,23 @@ pub struct TilemapMaterial {
     tileset_texture: Handle<Image>,
     #[texture(3, sample_type = "u_int")]
     tilemap_texture: Handle<Image>,
+    _phantom: PhantomData<T>,
 }
 
 pub fn plugin(app: &mut App) {
-    app.add_plugins(Material2dPlugin::<TilemapMaterial>::default())
-        .register_type::<Tilemap>();
-    plugin_with_data::<Tilemap>(app);
+    app.register_type::<Tilemap>();
+    plugin_with_shader::<TilemapShader>(app);
+    plugin_with_data::<TilemapShader, Tilemap>(app);
 }
 
-pub fn plugin_with_data<T: TilemapData + Component>(app: &mut App) {
+pub fn plugin_with_shader<S: TilemapMaterialShader>(app: &mut App) {
+    app.add_plugins(Material2dPlugin::<TilemapMaterial<S>>::default());
+}
+
+pub fn plugin_with_data<S: TilemapMaterialShader, T: TilemapData + Component>(app: &mut App) {
     app.add_systems(
         Update,
-        (construct_materials::<T>, update_tilemaps::<T>)
+        (construct_materials::<S, T>, update_tilemaps::<S, T>)
             .run_if(in_state(crate::states::AppState::InGame)),
     );
 }
@@ -73,9 +94,9 @@ impl Tilemap {
     }
 }
 
-fn update_tilemaps<T: TilemapData + Component>(
-    query: Query<(&T, &Handle<TilemapMaterial>), Changed<T>>,
-    mut materials: ResMut<Assets<TilemapMaterial>>,
+fn update_tilemaps<S: TilemapMaterialShader, T: TilemapData + Component>(
+    query: Query<(&T, &Handle<TilemapMaterial<S>>), Changed<T>>,
+    mut materials: ResMut<Assets<TilemapMaterial<S>>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     for (tilemap, material) in query.iter() {
@@ -90,11 +111,11 @@ fn update_tilemaps<T: TilemapData + Component>(
     }
 }
 
-fn construct_materials<T: TilemapData + Component>(
+fn construct_materials<S: TilemapMaterialShader, T: TilemapData + Component>(
     mut commands: Commands,
-    query: Query<(Entity, &T, &Tileset), Without<Handle<TilemapMaterial>>>,
+    query: Query<(Entity, &T, &Tileset), Without<Handle<TilemapMaterial<S>>>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<TilemapMaterial>>,
+    mut materials: ResMut<Assets<TilemapMaterial<S>>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     for (entity, tilemap, tileset) in query.iter() {
@@ -119,10 +140,16 @@ fn construct_materials<T: TilemapData + Component>(
         tileset_image.reinterpret_stacked_2d_as_array(tileset.num_tiles);
         tileset_image.sampler = ImageSampler::nearest();
 
-        let material = materials.add(TilemapMaterial {
-            grid_size: tilemap.grid_size().as_vec2().xyxy(),
+        let material = materials.add(TilemapMaterial::<S> {
+            grid_size: Vec4::new(
+                tilemap.grid_size().x as f32,
+                tilemap.grid_size().y as f32,
+                tilemap.subgrid_size().x as f32,
+                tilemap.subgrid_size().y as f32,
+            ),
             tileset_texture: tileset.image.clone(),
             tilemap_texture: tilemap_handle,
+            _phantom: PhantomData,
         });
 
         let mesh_handle = meshes.add(create_mesh(UVec2::new(
@@ -147,9 +174,9 @@ fn construct_materials<T: TilemapData + Component>(
 
 /// The Material2d trait is very configurable, but comes with sensible defaults for all methods.
 /// You only need to implement functions for features that need non-default behavior. See the Material2d api docs for details!
-impl Material2d for TilemapMaterial {
+impl<T: TilemapMaterialShader + Clone + Send + Sync> Material2d for TilemapMaterial<T> {
     fn fragment_shader() -> ShaderRef {
-        "shaders/tilemap.wgsl".into()
+        T::SHADER.into()
     }
 }
 
