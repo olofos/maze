@@ -26,15 +26,19 @@ pub fn plugin(app: &mut App) {
 }
 
 pub fn setup(mut commands: Commands) {
-    for num in 1..=NUM_CURSORS {
-        let x = ((num - 1) % 2) * (GRID_WIDTH as i32 - 1);
-        let y = ((num - 1) / 2) * (GRID_HEIGHT as i32 - 1);
+    let corner = [
+        IVec2::new(0, 0),
+        IVec2::new(GRID_WIDTH as i32 - 1, GRID_HEIGHT as i32 - 1),
+        IVec2::new(GRID_WIDTH as i32 - 1, 0),
+        IVec2::new(0, GRID_HEIGHT as i32 - 1),
+    ];
+    for num in 0..NUM_CURSORS as usize {
         commands.spawn((
             MazeCursor {
                 path: vec![],
-                default: IVec2::new(x, y),
+                default: corner[num],
             },
-            Name::from(format!("Cursor {num}")),
+            Name::from(format!("Cursor {}", num + 1)),
         ));
     }
 }
