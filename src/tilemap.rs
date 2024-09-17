@@ -15,7 +15,7 @@ use crate::consts::{GRID_HEIGHT, GRID_WIDTH};
 
 #[derive(Component, Reflect)]
 pub struct Tilemap {
-    pub grid_size: UVec2,
+    pub grid_size: Vec2,
     pub data: Vec<u8>,
 }
 
@@ -27,10 +27,7 @@ pub struct Tileset {
 
 pub trait TilemapData {
     fn data(&self) -> &Vec<u8>;
-    fn grid_size(&self) -> UVec2;
-    fn subgrid_size(&self) -> UVec2 {
-        UVec2::ZERO
-    }
+    fn size(&self) -> Vec4;
 }
 
 impl TilemapData for Tilemap {
@@ -38,8 +35,8 @@ impl TilemapData for Tilemap {
         &self.data
     }
 
-    fn grid_size(&self) -> UVec2 {
-        self.grid_size
+    fn size(&self) -> Vec4 {
+        Vec4::new(self.grid_size.x, self.grid_size.y, 0.0, 0.0)
     }
 }
 
@@ -69,15 +66,15 @@ struct TilemapMaterial<T: TilemapMaterialShader> {
 
 pub fn plugin(app: &mut App) {
     app.register_type::<Tilemap>();
-    plugin_with_shader::<TilemapShader>(app);
-    plugin_with_data::<TilemapShader, Tilemap>(app);
+    register_shader::<TilemapShader>(app);
+    register_data::<TilemapShader, Tilemap>(app);
 }
 
-pub fn plugin_with_shader<S: TilemapMaterialShader>(app: &mut App) {
+pub fn register_shader<S: TilemapMaterialShader>(app: &mut App) {
     app.add_plugins(Material2dPlugin::<TilemapMaterial<S>>::default());
 }
 
-pub fn plugin_with_data<S: TilemapMaterialShader, T: TilemapData + Component>(app: &mut App) {
+pub fn register_data<S: TilemapMaterialShader, T: TilemapData + Component>(app: &mut App) {
     app.add_systems(
         Update,
         (construct_materials::<S, T>, update_tilemaps::<S, T>)
@@ -88,7 +85,7 @@ pub fn plugin_with_data<S: TilemapMaterialShader, T: TilemapData + Component>(ap
 impl Tilemap {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
-            grid_size: UVec2::new(width, height),
+            grid_size: Vec2::new(width as f32, height as f32),
             data: vec![0; (width * height) as usize],
         }
     }
@@ -121,8 +118,8 @@ fn construct_materials<S: TilemapMaterialShader, T: TilemapData + Component>(
     for (entity, tilemap, tileset) in query.iter() {
         let mut tilemap_image = Image::new(
             Extent3d {
-                width: tilemap.grid_size().x,
-                height: tilemap.grid_size().y,
+                width: tilemap.size().x as u32,
+                height: tilemap.size().y as u32,
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
@@ -141,12 +138,7 @@ fn construct_materials<S: TilemapMaterialShader, T: TilemapData + Component>(
         tileset_image.sampler = ImageSampler::nearest();
 
         let material = materials.add(TilemapMaterial::<S> {
-            grid_size: Vec4::new(
-                tilemap.grid_size().x as f32,
-                tilemap.grid_size().y as f32,
-                tilemap.subgrid_size().x as f32,
-                tilemap.subgrid_size().y as f32,
-            ),
+            grid_size: tilemap.size(),
             tileset_texture: tileset.image.clone(),
             tilemap_texture: tilemap_handle,
             _phantom: PhantomData,

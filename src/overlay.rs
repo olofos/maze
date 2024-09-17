@@ -15,8 +15,8 @@ pub struct OverlayShader;
 
 pub fn plugin(app: &mut App) {
     app.register_type::<Overlay>().add_plugins((
-        crate::tilemap::plugin_with_shader::<OverlayShader>,
-        crate::tilemap::plugin_with_data::<OverlayShader, Overlay>,
+        crate::tilemap::register_shader::<OverlayShader>,
+        crate::tilemap::register_data::<OverlayShader, Overlay>,
     ));
 }
 
@@ -29,14 +29,12 @@ impl TilemapData for Overlay {
         &self.data
     }
 
-    fn grid_size(&self) -> UVec2 {
-        UVec2::new(GRID_WIDTH as u32, GRID_HEIGHT as u32)
-    }
-
-    fn subgrid_size(&self) -> UVec2 {
-        UVec2::new(
-            (PLAYFIELD_WIDTH / 16.0) as u32,
-            (PLAYFIELD_HEIGHT / 16.0) as u32,
+    fn size(&self) -> Vec4 {
+        Vec4::new(
+            GRID_WIDTH as f32,
+            GRID_HEIGHT as f32,
+            PLAYFIELD_WIDTH / 16.0,
+            PLAYFIELD_HEIGHT / 16.0,
         )
     }
 }

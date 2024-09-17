@@ -47,10 +47,10 @@ fn main() {
             ..default()
         }),
         tilemap::plugin,
-        tilemap::plugin_with_data::<tilemap::TilemapShader, Grid>,
+        tilemap::register_data::<tilemap::TilemapShader, Grid>,
         overlay::plugin,
         states::plugin,
-        maze::Plugin { maze_type: MazeType::Kruskal },
+        maze::Plugin { maze_type: MazeType::Backtracking },
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
@@ -63,6 +63,10 @@ fn main() {
         Update,
         (move_player, check_goal).run_if(in_state(GamePlayState::Playing)),
     )
+    .add_systems(
+        Update,
+        toggle_debug_overlay
+        )
     // semicolon
     ;
     #[cfg(not(target_arch = "wasm32"))]
@@ -163,7 +167,6 @@ fn create_alpha_tileset() -> Image {
         for _y in 0..H {
             for _x in 0..W {
                 data.extend([0x31, 0x99, 0x6f]);
-                // data.extend([0xb2,0x2d, 0xb0]);
                 data.push(alpha);
             }
         }
@@ -187,14 +190,14 @@ fn generate_bg(mut commands: Commands, mut query: Query<(Entity, &mut Tilemap), 
         return;
     };
 
-    let width = tilemap.grid_size.x;
-    let height = tilemap.grid_size.y;
+    let width = tilemap.grid_size.x as usize;
+    let height = tilemap.grid_size.y as usize;
 
     let mut rng = rand::thread_rng();
 
     for x in 0..width {
         for y in 0..height {
-            tilemap.data[(y * width + x) as usize] = rng.gen_range(-17i32..7).clamp(0, 7) as u8;
+            tilemap.data[y * width + x] = rng.gen_range(-17i32..7).clamp(0, 7) as u8;
         }
     }
 
@@ -322,5 +325,21 @@ pub fn close_on_esc(
         if input.just_pressed(KeyCode::Escape) {
             commands.entity(window).despawn();
         }
+    }
+}
+
+pub fn toggle_debug_overlay(
+    mut visiblity_query: Query<&mut Visibility, With<overlay::Overlay>>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    let Ok(mut visibility) = visiblity_query.get_single_mut() else {
+        return;
+    };
+
+    if input.just_pressed(KeyCode::F1) {
+        *visibility = match visibility.as_ref() {
+            Visibility::Inherited | Visibility::Visible => Visibility::Hidden,
+            Visibility::Hidden => Visibility::Visible,
+        };
     }
 }
