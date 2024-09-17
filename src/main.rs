@@ -50,7 +50,7 @@ fn main() {
         tilemap::register_data::<tilemap::TilemapShader, Grid>,
         overlay::plugin,
         states::plugin,
-        maze::Plugin { maze_type: MazeType::Backtracking },
+        maze::Plugin { maze_type: MazeType::Kruskal },
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
@@ -127,7 +127,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             image: asset_server.load("bg.png"),
             num_tiles: 7,
         },
-        Tilemap::new(32, 32),
+        Tilemap::new((SCREEN_WIDTH / 32.0) as u32, (SCREEN_HEIGHT / 32.0) as u32),
         Transform::default().with_translation(Vec3::new(0.0, 0.0, -5.0)),
         Ground,
         Name::from("Tilemap: Background"),
