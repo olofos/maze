@@ -50,7 +50,7 @@ fn main() {
         tilemap::register_data::<tilemap::TilemapShader, Grid>,
         overlay::plugin,
         states::plugin,
-        maze::Plugin { maze_type: MazeType::Backtracking },
+        maze::Plugin { maze_type: MazeType::Kruskal },
         ))
     .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .add_systems(Startup, setup)
