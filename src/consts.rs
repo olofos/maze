@@ -1,8 +1,8 @@
-pub const GRID_WIDTH: usize = 16;
-pub const GRID_HEIGHT: usize = 16;
+pub const GRID_WIDTH: usize = 20;
+pub const GRID_HEIGHT: usize = 20;
 pub const MARGIN: f32 = 16.0;
-pub const PLAYFIELD_WIDTH: f32 = 1024.0;
-pub const PLAYFIELD_HEIGHT: f32 = 1024.0;
+pub const PLAYFIELD_WIDTH: f32 = 80.0 * 16.0;
+pub const PLAYFIELD_HEIGHT: f32 = 80.0 * 16.0;
 pub const SCREEN_WIDTH: f32 = PLAYFIELD_WIDTH + MARGIN * 2.0;
 pub const SCREEN_HEIGHT: f32 = PLAYFIELD_HEIGHT + MARGIN * 2.0;
 pub const PIXEL_WIDTH: f32 = GRID_WIDTH as f32 / PLAYFIELD_WIDTH;

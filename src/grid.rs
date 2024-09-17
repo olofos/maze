@@ -4,7 +4,7 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct Grid {
     data: Vec<u8>,
-    pub region: Vec<u8>,
+    pub region: Vec<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +51,7 @@ impl Grid {
     pub fn new() -> Self {
         Self {
             data: vec![0; GRID_WIDTH * GRID_HEIGHT],
-            region: (0..(GRID_WIDTH * GRID_HEIGHT)).map(|n| n as u8).collect(),
+            region: (0..(GRID_WIDTH * GRID_HEIGHT)).map(|n| n as u16).collect(),
         }
     }
 
@@ -59,7 +59,7 @@ impl Grid {
         (pos.y as usize) * GRID_WIDTH + pos.x as usize
     }
 
-    pub fn region(&self, pos: IVec2) -> u8 {
+    pub fn region(&self, pos: IVec2) -> u16 {
         self.region[self.index(pos)]
     }
 
@@ -89,7 +89,7 @@ impl Grid {
         Ok(())
     }
 
-    fn fill_region(&mut self, pos: IVec2, region: u8) {
+    fn fill_region(&mut self, pos: IVec2, region: u16) {
         let index = self.index(pos);
         if self.region[index] == region {
             return;

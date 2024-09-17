@@ -65,5 +65,7 @@ pub fn update_overlay(
         return;
     };
 
-    overlay.data.clone_from(&grid.region);
+    for (i, n) in grid.region.iter().enumerate() {
+        overlay.data[i] = (*n & 0xFF) as u8;
+    }
 }
