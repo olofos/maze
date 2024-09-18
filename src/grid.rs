@@ -1,10 +1,10 @@
-use crate::{consts::*, tilemap};
+use crate::{consts::*, disjoint_set::DisjointSet, tilemap};
 use bevy::prelude::*;
 
 #[derive(Component)]
 pub struct Grid {
     data: Vec<u8>,
-    pub region: Vec<u16>,
+    pub regions: DisjointSet,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +51,7 @@ impl Grid {
     pub fn new() -> Self {
         Self {
             data: vec![0; GRID_WIDTH * GRID_HEIGHT],
-            region: (0..(GRID_WIDTH * GRID_HEIGHT)).map(|n| n as u16).collect(),
+            regions: DisjointSet::new(GRID_WIDTH * GRID_HEIGHT),
         }
     }
 
@@ -59,8 +59,12 @@ impl Grid {
         (pos.y as usize) * GRID_WIDTH + pos.x as usize
     }
 
-    pub fn region(&self, pos: IVec2) -> u16 {
-        self.region[self.index(pos)]
+    pub fn region(&self, pos: IVec2) -> usize {
+        self.regions.find(self.index(pos))
+    }
+
+    pub fn join_regions(&mut self, pos: IVec2, other: IVec2) {
+        self.regions.join(self.index(pos), self.index(other));
     }
 
     pub fn get_walls(&self, pos: IVec2) -> u8 {
@@ -78,28 +82,15 @@ impl Grid {
 
     pub fn remove_wall(&mut self, pos: IVec2, dir: Dir) -> Result<(), ()> {
         let new_pos: IVec2 = pos + IVec2::from(dir);
-        if self.region[self.index(pos)] == self.region[self.index(new_pos)] {
+        if self.region(pos) == self.region(new_pos) {
             return Err(());
         }
+        self.join_regions(pos, new_pos);
+
         *self.get_walls_mut(pos) |= dir as u8;
-        let region = self.region[self.index(pos)];
         *self.get_walls_mut(new_pos) |= dir.reverse() as u8;
-        self.fill_region(new_pos, region);
 
         Ok(())
-    }
-
-    fn fill_region(&mut self, pos: IVec2, region: u16) {
-        let index = self.index(pos);
-        if self.region[index] == region {
-            return;
-        }
-        self.region[index] = region;
-        for dir in [Dir::North, Dir::East, Dir::South, Dir::West] {
-            if !self.has_wall(pos, dir) {
-                self.fill_region(pos + IVec2::from(dir), region);
-            }
-        }
     }
 
     pub fn has_wall(&self, pos: IVec2, dir: Dir) -> bool {

@@ -55,7 +55,7 @@ pub fn update_cover(
 }
 
 pub fn update_overlay(
-    grid_query: Query<&Grid>,
+    grid_query: Query<&Grid, Changed<Grid>>,
     mut overlay_query: Query<&mut crate::overlay::Overlay>,
 ) {
     let Ok(mut overlay) = overlay_query.get_single_mut() else {
@@ -66,7 +66,16 @@ pub fn update_overlay(
         return;
     };
 
-    for (i, n) in grid.region.iter().enumerate() {
-        overlay.data[i] = (*n & 0xFF) as u8;
+    for (i, n) in grid.regions.values().enumerate() {
+        overlay.data[i] = (n & 0xFF) as u8;
     }
+
+    println!(
+        "Num sets: {},  Max depth {}",
+        grid.regions.num_sets(),
+        (0..GRID_WIDTH * GRID_HEIGHT)
+            .map(|i| grid.regions.depth(i))
+            .max()
+            .unwrap()
+    );
 }

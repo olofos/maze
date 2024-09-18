@@ -14,6 +14,7 @@ use tilemap::Tilemap;
 
 mod components;
 mod consts;
+mod disjoint_set;
 mod grid;
 mod maze;
 mod overlay;
