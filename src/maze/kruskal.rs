@@ -59,12 +59,17 @@ pub fn generate(
     };
 
     for _ in 0..1 {
+        if grid.regions.num_sets() == 1 {
+            println!("Maze done");
+            next_state.set(crate::GamePlayState::Playing);
+            return;
+        };
+
         loop {
-            let Some((pos, dir)) = state.queue.pop() else {
-                println!("Maze done");
-                next_state.set(crate::GamePlayState::Playing);
-                return;
-            };
+            let (pos, dir) = state
+                .queue
+                .pop()
+                .expect("The queue should not be empty yet");
 
             if grid.remove_wall(pos, dir).is_ok() {
                 break;

@@ -100,4 +100,18 @@ impl Grid {
             || (pos.x == GRID_WIDTH as i32 - 1 && dir == Dir::East)
             || (pos.y == GRID_HEIGHT as i32 - 1 && dir == Dir::North)
     }
+
+    fn is_inside(&self, pos: IVec2) -> bool {
+        pos.x >= 0 && pos.x < GRID_WIDTH as i32 && pos.y >= 0 && pos.y < GRID_HEIGHT as i32
+    }
+
+    pub fn possible_moves(&self, pos: IVec2) -> Vec<Dir> {
+        [Dir::North, Dir::East, Dir::South, Dir::West]
+            .into_iter()
+            .filter(|d| {
+                let p = pos + IVec2::from(*d);
+                self.is_inside(p) && self.region(p) != self.region(pos)
+            })
+            .collect()
+    }
 }
