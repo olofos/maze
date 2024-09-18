@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::math::IVec2;
 use rand::seq::SliceRandom;
 
 use crate::{
@@ -6,7 +6,6 @@ use crate::{
     grid::{Dir, Grid},
 };
 
-#[derive(Component)]
 pub struct MazeState {
     queue: Vec<(IVec2, Dir)>,
 }

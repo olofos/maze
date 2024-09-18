@@ -1,11 +1,10 @@
 use crate::{consts::*, grid::Grid};
-use bevy::prelude::*;
+use bevy::math::IVec2;
 
 struct MazeCursor {
     path: Vec<IVec2>,
 }
 
-#[derive(Component)]
 pub struct MazeState {
     cursors: Vec<MazeCursor>,
 }
