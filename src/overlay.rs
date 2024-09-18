@@ -41,6 +41,12 @@ impl TilemapData for Overlay {
 
 impl Overlay {
     pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+impl Default for Overlay {
+    fn default() -> Self {
         Self {
             data: vec![0; GRID_WIDTH * GRID_HEIGHT],
         }

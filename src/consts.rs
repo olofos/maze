@@ -15,4 +15,4 @@ pub const PLAYER_HEIGHT: f32 = 0.75;
 pub const PLAYER_SPEED: f32 = GRID_WIDTH as f32 / 4.0;
 
 pub const NUM_CURSORS: i32 = 4;
-pub const MAZE_GEN_TIME_MS: u64 = 1;
+pub const MAZE_GEN_TIME_MS: u64 = 100;

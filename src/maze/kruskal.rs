@@ -66,7 +66,7 @@ pub fn generate(
                 return;
             };
 
-            if let Ok(_) = grid.remove_wall(pos, dir) {
+            if grid.remove_wall(pos, dir).is_ok() {
                 break;
             }
         }

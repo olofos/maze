@@ -39,20 +39,12 @@ impl DisjointSet {
 
     pub fn find(&self, index: usize) -> usize {
         let mut i = index;
-        let root = loop {
+        loop {
             match self.entries[i] {
                 Entry::Root { size: _ } => break i,
                 Entry::Link { index: j } => i = j,
             }
-        };
-
-        root
-    }
-
-    pub fn find_and_compress(&mut self, index: usize) -> usize {
-        let root = self.find(index);
-        self.compress(index, root);
-        root
+        }
     }
 
     fn compress(&mut self, index: usize, root: usize) {
@@ -97,12 +89,8 @@ impl DisjointSet {
         self.compress(b, a_root);
     }
 
-    pub fn is_joined(&self, a: usize, b: usize) -> bool {
-        self.find(a) == self.find(b)
-    }
-
     pub fn is_singleton(&self, index: usize) -> bool {
-        matches!(self.entries[self.find(index)], Entry::Root { size: 1 })
+        matches!(self.entries[index], Entry::Root { size: 1 })
     }
 
     pub fn depth(&self, index: usize) -> usize {
@@ -130,7 +118,7 @@ mod tests {
         assert_eq!(ds.num_sets(), 2);
         assert_eq!(ds.find(0), 0);
         assert_eq!(ds.find(1), 1);
-        assert!(!ds.is_joined(0, 1));
+        assert!(ds.find(0) != ds.find(1));
         assert!(ds.is_singleton(0));
         assert!(ds.is_singleton(1));
     }
@@ -163,12 +151,12 @@ mod tests {
         ds.join(2, 3);
         println!("{:?}", ds);
 
-        assert!(ds.is_joined(0, 1));
-        assert!(!ds.is_joined(1, 2));
-        assert!(ds.is_joined(2, 3));
-        assert!(!ds.is_joined(3, 0));
-        assert!(!ds.is_joined(0, 2));
-        assert!(!ds.is_joined(1, 3));
+        assert!(ds.find(0) == ds.find(1));
+        assert!(ds.find(1) != ds.find(2));
+        assert!(ds.find(2) == ds.find(3));
+        assert!(ds.find(3) != ds.find(0));
+        assert!(ds.find(0) != ds.find(2));
+        assert!(ds.find(1) != ds.find(3));
         assert_eq!(ds.num_sets(), 2);
         assert_eq!(ds.num_members(0), 2);
         assert_eq!(ds.num_members(1), 2);
@@ -176,12 +164,12 @@ mod tests {
         assert_eq!(ds.num_members(3), 2);
 
         ds.join(3, 1);
-        assert!(ds.is_joined(0, 1));
-        assert!(ds.is_joined(1, 2));
-        assert!(ds.is_joined(2, 3));
-        assert!(ds.is_joined(3, 0));
-        assert!(ds.is_joined(0, 2));
-        assert!(ds.is_joined(1, 3));
+        assert!(ds.find(0) == ds.find(1));
+        assert!(ds.find(1) == ds.find(2));
+        assert!(ds.find(2) == ds.find(3));
+        assert!(ds.find(3) == ds.find(0));
+        assert!(ds.find(0) == ds.find(2));
+        assert!(ds.find(1) == ds.find(3));
         assert_eq!(ds.num_sets(), 1);
         assert_eq!(ds.num_members(0), 4);
         assert_eq!(ds.num_members(1), 4);

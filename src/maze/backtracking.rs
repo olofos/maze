@@ -9,10 +9,14 @@ use crate::{
     states::GamePlayState,
 };
 
-#[derive(Component)]
-pub struct MazeCursor {
+struct MazeCursor {
     path: Vec<IVec2>,
     default: IVec2,
+}
+
+#[derive(Component)]
+pub struct MazeState {
+    cursors: Vec<MazeCursor>,
 }
 
 pub fn plugin(app: &mut App) {
@@ -32,19 +36,17 @@ pub fn setup(mut commands: Commands) {
         IVec2::new(GRID_WIDTH as i32 - 1, 0),
         IVec2::new(0, GRID_HEIGHT as i32 - 1),
     ];
-    for num in 0..NUM_CURSORS as usize {
-        commands.spawn((
-            MazeCursor {
-                path: vec![],
-                default: corner[num],
-            },
-            Name::from(format!("Cursor {}", num + 1)),
-        ));
-    }
+    let cursors = (0..NUM_CURSORS as usize)
+        .map(|n| MazeCursor {
+            path: vec![],
+            default: corner[n],
+        })
+        .collect();
+    commands.spawn(MazeState { cursors });
 }
 
 pub fn generate(
-    mut cursor_query: Query<&mut MazeCursor>,
+    mut state_query: Query<&mut MazeState>,
     mut grid_query: Query<&mut Grid, With<Trees>>,
     mut next_state: ResMut<NextState<crate::GamePlayState>>,
 ) {
@@ -52,10 +54,14 @@ pub fn generate(
         return;
     };
 
+    let Ok(mut state) = state_query.get_single_mut() else {
+        return;
+    };
+
     for _ in 0..1 {
-        // loop {
         let mut num_completed = 0;
-        for mut cursor in cursor_query.iter_mut() {
+        // loop {
+        for cursor in &mut state.cursors {
             let old_pos = cursor.path.last().copied();
 
             let (pos, dir) = if let Some(old_pos) = &old_pos {

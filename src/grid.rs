@@ -77,7 +77,7 @@ impl Grid {
     }
 
     pub fn is_visited(&self, pos: IVec2) -> bool {
-        self.get_walls(pos) > 0
+        !self.regions.is_singleton(self.index(pos))
     }
 
     pub fn remove_wall(&mut self, pos: IVec2, dir: Dir) -> Result<(), ()> {

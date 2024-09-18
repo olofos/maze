@@ -108,6 +108,7 @@ fn update_tilemaps<S: TilemapMaterialShader, T: TilemapData + Component>(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn construct_materials<S: TilemapMaterialShader, T: TilemapData + Component>(
     mut commands: Commands,
     query: Query<(Entity, &T, &Tileset), Without<Handle<TilemapMaterial<S>>>>,
