@@ -1,6 +1,13 @@
-use bevy::prelude::*;
+use std::time::Duration;
 
-use crate::{components::*, consts::*, grid::Grid, states::AppState};
+use bevy::{prelude::*, time::common_conditions::on_timer};
+
+use crate::{
+    components::*,
+    consts::*,
+    grid::Grid,
+    states::{AppState, GamePlayState},
+};
 
 mod backtracking;
 mod kruskal;
@@ -13,6 +20,12 @@ pub enum MazeType {
     Kruskal,
 }
 
+#[derive(Component)]
+pub enum MazeState {
+    Backtracking(backtracking::MazeState),
+    Kruskal(kruskal::MazeState),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Plugin {
     pub maze_type: MazeType,
@@ -20,14 +33,59 @@ pub struct Plugin {
 
 impl bevy::prelude::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        match self.maze_type {
-            MazeType::Backtracking => backtracking::plugin(app),
-            MazeType::Kruskal => kruskal::plugin(app),
-        }
+        let maze_type = self.maze_type;
         app.add_systems(
+            OnEnter(GamePlayState::GeneratingMaze),
+            move |commands: Commands| setup(commands, maze_type),
+        )
+        .add_systems(
+            Update,
+            generate
+                .run_if(on_timer(Duration::from_millis(MAZE_GEN_TIME_MS)))
+                .run_if(in_state(GamePlayState::GeneratingMaze)),
+        )
+        .add_systems(
             Update,
             (update_cover, update_overlay).run_if(in_state(AppState::InGame)),
         );
+    }
+}
+
+pub fn setup(mut commands: Commands, maze_type: MazeType) {
+    let state = match maze_type {
+        MazeType::Backtracking => MazeState::Backtracking(backtracking::init()),
+        MazeType::Kruskal => MazeState::Kruskal(kruskal::init()),
+    };
+    commands.spawn(state);
+}
+
+pub fn generate(
+    mut state_query: Query<&mut MazeState>,
+    mut grid_query: Query<&mut Grid, With<Trees>>,
+    mut next_state: ResMut<NextState<crate::GamePlayState>>,
+) {
+    let Ok(mut grid) = grid_query.get_single_mut() else {
+        return;
+    };
+
+    let Ok(mut state) = state_query.get_single_mut() else {
+        return;
+    };
+
+    let state = &mut *state;
+    let grid = &mut *grid;
+
+    for _ in 0..1 {
+        if grid.regions.num_sets() == 1 {
+            println!("Maze done");
+            next_state.set(crate::GamePlayState::Playing);
+            return;
+        }
+
+        match state {
+            MazeState::Backtracking(maze_state) => backtracking::step(maze_state, grid),
+            MazeState::Kruskal(maze_state) => kruskal::step(maze_state, grid),
+        }
     }
 }
 
