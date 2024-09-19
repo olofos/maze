@@ -11,6 +11,7 @@ use crate::{
 
 mod backtracking;
 mod kruskal;
+mod wfc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[allow(dead_code)]
@@ -18,12 +19,14 @@ pub enum MazeType {
     #[default]
     Backtracking,
     Kruskal,
+    Wfc,
 }
 
 #[derive(Component)]
 pub enum MazeState {
     Backtracking(backtracking::MazeState),
     Kruskal(kruskal::MazeState),
+    Wfc(wfc::MazeState),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -55,6 +58,7 @@ pub fn setup(mut commands: Commands, maze_type: MazeType) {
     let state = match maze_type {
         MazeType::Backtracking => MazeState::Backtracking(backtracking::init()),
         MazeType::Kruskal => MazeState::Kruskal(kruskal::init()),
+        MazeType::Wfc => MazeState::Wfc(wfc::init()),
     };
     commands.spawn(state);
 }
@@ -85,6 +89,7 @@ pub fn generate(
         match state {
             MazeState::Backtracking(maze_state) => backtracking::step(maze_state, grid),
             MazeState::Kruskal(maze_state) => kruskal::step(maze_state, grid),
+            MazeState::Wfc(maze_state) => wfc::step(maze_state, grid),
         }
     }
 }
