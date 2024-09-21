@@ -332,17 +332,14 @@ pub fn close_on_esc(
 }
 
 pub fn toggle_debug_overlay(
-    mut visiblity_query: Query<&mut Visibility, With<overlay::Overlay>>,
+    mut overlay_query: Query<&mut overlay::Overlay>,
     input: Res<ButtonInput<KeyCode>>,
 ) {
-    let Ok(mut visibility) = visiblity_query.get_single_mut() else {
+    let Ok(mut overlay) = overlay_query.get_single_mut() else {
         return;
     };
 
     if input.just_pressed(KeyCode::F1) {
-        *visibility = match visibility.as_ref() {
-            Visibility::Inherited | Visibility::Visible => Visibility::Hidden,
-            Visibility::Hidden => Visibility::Visible,
-        };
+        overlay.toggle();
     }
 }
