@@ -7,7 +7,7 @@ edition = "2021"
 bevy = { version = "0.14.1" }
 rand = "0.8.5"
 
-[target.'cfg(not(target_os = "windows"))'.dependencies]
+[target.'cfg(not(target = "x86_64-pc-windows-gnu"))'.dependencies]
 bevy = { version = "0.14.1", features = ["dynamic_linking"] }
 
 
