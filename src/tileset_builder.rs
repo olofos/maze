@@ -5,6 +5,7 @@ use bevy::{
         render_resource::{Extent3d, TextureDimension},
         texture::ImageSampler,
     },
+    sprite::Mesh2dHandle,
 };
 
 use crate::consts::*;
@@ -127,9 +128,9 @@ pub fn expand(image: Image) -> Image {
     tileset_image
 }
 
-pub fn construct_tilemap(
+pub fn construct_tileset(
     mut commands: Commands,
-    query: Query<(Entity, &Tileset), Without<crate::tilemap::Tilemap>>,
+    query: Query<(Entity, &Tileset), (Without<crate::tilemap::Tileset>, Without<Mesh2dHandle>)>,
     mut images: ResMut<Assets<Image>>,
 ) {
     for (entity, loader) in query.iter() {

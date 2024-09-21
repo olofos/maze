@@ -57,7 +57,7 @@ fn main() {
     .add_systems(Startup, setup)
     .add_systems(OnEnter(GamePlayState::Playing), setup_player_and_goal)
     .add_systems(Update, (
-        tileset_builder::construct_tilemap,
+        tileset_builder::construct_tileset,
         generate_bg,
     ).run_if(in_state(GamePlayState::GeneratingMaze)))
     .add_systems(
