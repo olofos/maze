@@ -96,9 +96,10 @@ pub fn generate(
 
 pub fn update_cover(
     grid_query: Query<&Grid>,
-    mut cover_query: Query<&mut crate::tilemap::Tilemap, With<Cover>>,
+    mut cover_query: Query<(&mut crate::tilemap::Tilemap, &mut Cover)>,
+    time: Res<Time>,
 ) {
-    let Ok(mut cover) = cover_query.get_single_mut() else {
+    let Ok((mut tilemap, mut cover)) = cover_query.get_single_mut() else {
         return;
     };
 
@@ -106,12 +107,15 @@ pub fn update_cover(
         return;
     };
 
+    let inc = cover.step(time.delta_seconds());
+
     for y in 0..GRID_HEIGHT {
         for x in 0..GRID_WIDTH {
             if !grid.is_visited(IVec2::new(x as i32, y as i32)) {
-                cover.data[y * GRID_WIDTH + x] = 0;
+                tilemap.data[y * GRID_WIDTH + x] = 0;
             } else {
-                cover.data[y * GRID_WIDTH + x] = (cover.data[y * GRID_WIDTH + x] + 1).clamp(0, 64);
+                tilemap.data[y * GRID_WIDTH + x] =
+                    tilemap.data[y * GRID_WIDTH + x].saturating_add(inc as u8);
             }
         }
     }

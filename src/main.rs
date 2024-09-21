@@ -135,13 +135,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 
     commands.spawn((
-        tilemap::Tileset {
-            image: asset_server.add(create_alpha_tileset()),
-            num_tiles: 4 + 1,
-        },
+        create_alpha_tileset(&asset_server),
         Tilemap::new(GRID_WIDTH as u32, GRID_HEIGHT as u32),
         Transform::default().with_translation(Vec3::new(0.0, 0.0, 10.0)),
-        Cover,
+        Cover::default(),
         Name::from("Tilemap: Cover"),
     ));
 
@@ -156,10 +153,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-fn create_alpha_tileset() -> Image {
+fn create_alpha_tileset(asset_server: &Res<AssetServer>) -> tilemap::Tileset {
     let mut data = vec![];
-    const W: usize = TILE_WIDTH;
-    const H: usize = TILE_HEIGHT;
+    const W: usize = 1;
+    const H: usize = 1;
     const STEPS: u32 = 4 + 1;
 
     for n in (0..STEPS).rev() {
@@ -167,13 +164,13 @@ fn create_alpha_tileset() -> Image {
         println!("alpha: {}", alpha);
         for _y in 0..H {
             for _x in 0..W {
-                data.extend([0x31, 0x99, 0x6f]);
+                data.extend(BG_COLOR);
                 data.push(alpha);
             }
         }
     }
 
-    Image::new(
+    let image = Image::new(
         Extent3d {
             width: W as u32,
             height: H as u32 * STEPS,
@@ -183,7 +180,12 @@ fn create_alpha_tileset() -> Image {
         data,
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::all(),
-    )
+    );
+
+    tilemap::Tileset {
+        image: asset_server.add(image),
+        num_tiles: STEPS,
+    }
 }
 
 fn generate_bg(mut commands: Commands, mut query: Query<(Entity, &mut Tilemap), With<Ground>>) {
