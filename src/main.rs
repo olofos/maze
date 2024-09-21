@@ -42,6 +42,7 @@ fn main() {
                 title: "Maze".to_string(),
                 resizable: false,
                 resolution: (SCREEN_WIDTH, SCREEN_HEIGHT).into(),
+                position: WindowPosition::At(IVec2::new(0, 0)),
                 present_mode,
                 ..default()
             }),
