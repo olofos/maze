@@ -15,5 +15,6 @@ pub const PLAYER_HEIGHT: f32 = 0.75;
 pub const PLAYER_SPEED: f32 = GRID_WIDTH as f32 / 4.0;
 
 pub const NUM_CURSORS: i32 = 4;
+pub const MAZE_GEN_TIME_MS: u64 = 25;
 
 pub const BG_COLOR: [u8; 3] = [0x31, 0x99, 0x6f];
