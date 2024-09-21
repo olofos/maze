@@ -12,7 +12,7 @@ pub const TILE_HEIGHT: usize = PLAYFIELD_HEIGHT as usize / GRID_HEIGHT / 2;
 
 pub const PLAYER_WIDTH: f32 = 0.75;
 pub const PLAYER_HEIGHT: f32 = 0.75;
-pub const PLAYER_SPEED: f32 = GRID_WIDTH as f32 / 4.0;
+pub const PLAYER_SPEED: f32 = 2.0;
 
 pub const NUM_CURSORS: i32 = 4;
 pub const MAZE_GEN_TIME_MS: u64 = 25;
